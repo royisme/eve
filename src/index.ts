@@ -4,6 +4,8 @@ import { jobs } from "./core/db/schema";
 import { GmailSource } from "./core/gmail";
 import { Dispatcher } from "./core/dispatcher";
 import { ConfigManager } from "./core/config";
+import { FirecrawlService } from "./services/firecrawl";
+import { eq, isNull } from "drizzle-orm";
 
 const cli = cac("eva");
 
@@ -11,16 +13,12 @@ const cli = cac("eva");
 
 cli.command("init", "Initialize Eva (Interactive)").action(async () => {
     console.log("👋 Welcome to Eva Initialization Wizard");
-    console.log("This will help you configure Gmail, LLM, and Database.");
-    console.log("(Interactive inputs not fully supported in this shell environment yet. Use `config set` for now.)");
-    
-    // In a real TTY, we would use prompts. Here we guide the user.
-    console.log("\n1. Configure Google Accounts:");
+    console.log("1. Configure Google Accounts:");
     console.log("   Run: eva config set services.google.accounts '[\"you@gmail.com\"]'");
-    
-    console.log("\n2. Configure LLM Provider (Ark/Anthropic):");
+    console.log("2. Configure LLM:");
     console.log("   Run: eva config set services.llm.api_key \"sk-...\"");
-    console.log("   Run: eva config set services.llm.base_url \"https://ark...\"");
+    console.log("3. Configure Firecrawl (Optional):");
+    console.log("   Run: eva config set services.firecrawl.api_key \"fc-...\"");
 });
 
 cli.command("ingest", "Scan emails and update database")
@@ -37,8 +35,28 @@ cli.command("ingest", "Scan emails and update database")
         for (const email of emails) {
             await dispatcher.dispatch(email);
         }
-        console.log("✅ Eva cycle complete.");
+        console.log("✅ Eva ingestion complete.");
    });
+
+cli.command("enrich", "Crawl full job descriptions for links").action(async () => {
+    const firecrawl = new FirecrawlService();
+    // Find jobs with URLs but no description
+    const targets = await db.select().from(jobs).where(isNull(jobs.description)).all();
+    
+    console.log(`🕷️ Found ${targets.length} jobs to enrich...`);
+    
+    for (const job of targets) {
+        if (job.url && job.url.startsWith("http") && !job.url.includes("google.com/mail")) {
+            const markdown = await firecrawl.crawl(job.url);
+            if (markdown) {
+                await db.update(jobs)
+                    .set({ description: markdown, crawledAt: new Date().toISOString() })
+                    .where(eq(jobs.id, job.id));
+                console.log(`✅ Enriched: ${job.company} - ${job.role}`);
+            }
+        }
+    }
+});
 
 cli.command("report", "Generate a markdown report of jobs").action(async () => {
     const rows = await db.select().from(jobs).orderBy(jobs.id).limit(20);
@@ -48,11 +66,14 @@ cli.command("report", "Generate a markdown report of jobs").action(async () => {
     } else {
         for (const job of rows) {
             const statusIcon = job.status === 'New' ? '🆕' : '📋';
-            console.log(`### ${statusIcon} ${job.role || 'Unknown Role'} @ ${job.company || 'Unknown Company'}`);
+            const enrichedIcon = job.description ? '📄' : '';
+            console.log(`### ${statusIcon} ${job.role || 'Unknown Role'} @ ${job.company || 'Unknown Company'} ${enrichedIcon}`);
             console.log(`- **Source**: ${job.sender}`);
             console.log(`- **Subject**: ${job.subject}`);
             console.log(`- **Received**: ${job.receivedAt}`);
-            console.log(`- **Status**: ${job.status}\n`);
+            console.log(`- **Status**: ${job.status}`);
+            if (job.url) console.log(`- **Link**: [Open](${job.url})`);
+            console.log("");
         }
     }
     console.log(`\n_Total jobs in database: ${rows.length}_`);

@@ -15,6 +15,9 @@ export const jobs = sqliteTable('jobs', {
   status: text('status').default('New'), // New, Applied, Interview, Rejected, Offer
   url: text('url'), // Direct job link or Gmail link
   
+  description: text('description'), // Full JD from Firecrawl
+  crawledAt: text('crawled_at'),
+  
   rawBody: text('raw_body'),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
