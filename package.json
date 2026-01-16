@@ -25,7 +25,7 @@
     "query": "bun run src/index.ts query",
     "clean": "bun run src/index.ts clean",
     "start": "bun run src/index.ts",
-    "build": "bun build ./src/index.ts --compile --outfile eva",
+    "build": "mkdir -p release && bun build ./src/index.ts --compile --outfile release/eva",
     "check": "oxlint . && tsc --noEmit",
     "prepare": "husky"
   },
