@@ -18,5 +18,13 @@ export const jobs = sqliteTable('jobs', {
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const sysConfig = sqliteTable('sys_config', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(), // JSON stringified
+  group: text('group'),           // e.g. 'service.google', 'core'
+  updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
 export type Job = typeof jobs.$inferSelect;
 export type NewJob = typeof jobs.$inferInsert;
+export type SysConfig = typeof sysConfig.$inferSelect;

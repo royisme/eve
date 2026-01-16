@@ -19,13 +19,13 @@ export class Dispatcher {
     }
 
     private isJobRelated(subject: string, sender: string, snippet: string): boolean {
-        const keywords = ["apply", "application", "interview", "offer", "resume", "job", "hiring", "career", "role"];
+        const keywords = ["apply", "application", "interview", "offer", "resume", "job", "hiring", "career", "role", "engineer"];
         const platforms = ["linkedin", "indeed", "glassdoor", "wellfound", "lever", "greenhouse"];
         
-        const combined = `${subject} ${sender} ${snippet}`;
+        const combined = `${subject} ${sender} ${snippet}`.toLowerCase();
         
         const hasKeyword = keywords.some(k => combined.includes(k));
-        const isPlatform = platforms.some(p => sender.includes(p));
+        const isPlatform = platforms.some(p => sender.toLowerCase().includes(p));
 
         return hasKeyword || isPlatform;
     }

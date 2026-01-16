@@ -1,27 +1,33 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { ConfigManager } from "../core/config";
 
 export class LLMService {
-    private client: Anthropic;
-    private model: string;
+    private client: Anthropic | null = null;
+    private model: string = "ark-code-latest";
 
-    constructor() {
-        const apiKey = process.env.ANTHROPIC_API_KEY;
-        const baseURL = process.env.ANTHROPIC_BASE_URL;
+    async init() {
+        const apiKey = await ConfigManager.get<string>("services.llm.api_key");
+        const baseURL = await ConfigManager.get<string>("services.llm.base_url");
+        this.model = await ConfigManager.get<string>("services.llm.model", "ark-code-latest") || "ark-code-latest";
 
         if (!apiKey) {
-            throw new Error("Missing ANTHROPIC_API_KEY in .env");
+            console.warn("⚠️ No LLM API Key configured. Run `eva config set services.llm.api_key '...'`");
+            return false;
         }
 
         this.client = new Anthropic({
             apiKey: apiKey,
             baseURL: baseURL,
         });
-
-        // Configured model from user request
-        this.model = "ark-code-latest";
+        return true;
     }
 
     async extractJobDetails(subject: string, snippet: string, sender: string): Promise<{ company: string, role: string, status: string }> {
+        if (!this.client) {
+            const ready = await this.init();
+            if (!ready) return { company: "Unknown", role: "Unknown", status: "New" };
+        }
+
         const prompt = `
 You are an intelligent email parser for a job hunting assistant.
 Extract the Company Name, Role/Job Title, and Application Status from the following email metadata.
@@ -45,7 +51,7 @@ Format:
 `;
 
         try {
-            const response = await this.client.messages.create({
+            const response = await this.client!.messages.create({
                 model: this.model,
                 max_tokens: 1024,
                 messages: [{ role: 'user', content: prompt }],
