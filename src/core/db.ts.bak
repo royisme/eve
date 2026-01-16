@@ -1,0 +1,27 @@
+import { Database } from "bun:sqlite";
+
+const db = new Database("eva.db");
+
+export function initDb() {
+    // Core tables
+    // Modules will register their own tables or we define them here for simplicity
+    
+    // Jobs Module
+    db.run(`
+        CREATE TABLE IF NOT EXISTS jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account TEXT,
+            sender TEXT,
+            subject TEXT,
+            snippet TEXT,
+            received_at DATETIME,
+            company TEXT,
+            role TEXT,
+            status TEXT,
+            raw_body TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+}
+
+export { db };
