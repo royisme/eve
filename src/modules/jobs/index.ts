@@ -27,6 +27,17 @@ export class JobModule {
         const opportunities = await adapter.extract(email);
 
         for (const opp of opportunities) {
+            // Construct Link
+            // Priority: 1. Extracted Direct Link (opp.applyUrl)
+            //           2. Gmail Thread Link (fallback)
+            let link = opp.applyUrl;
+            if (!link && email.threadId) {
+                // Gmail Web Link format: https://mail.google.com/mail/u/0/#inbox/{threadId}
+                // Note: The 'u/0' might differ if user is logged into multiple accounts in browser,
+                // but u/0 is a safe default for "default account".
+                link = `https://mail.google.com/mail/u/0/#inbox/${email.threadId}`;
+            }
+
             await db.insert(jobs).values({
                 account: account || "Unknown",
                 sender: sender,
@@ -36,6 +47,7 @@ export class JobModule {
                 company: opp.company,
                 role: opp.role,
                 status: 'New',
+                url: link,
                 rawBody: opp.originalBody
             });
             console.log(`✅ [JobModule] Saved: ${opp.role} @ ${opp.company} (via ${adapter.name})`);

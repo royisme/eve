@@ -13,6 +13,7 @@ export const jobs = sqliteTable('jobs', {
   company: text('company'),
   role: text('role'),
   status: text('status').default('New'), // New, Applied, Interview, Rejected, Offer
+  url: text('url'), // Direct job link or Gmail link
   
   rawBody: text('raw_body'),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),

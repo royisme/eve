@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { render, Box, Text, useInput } from "@mariozechner/pi-tui"; // Use correct imports from pi-tui
 import { Database } from "bun:sqlite";
+import open from "open";
 
 // Mock DB read since TUI runs in same process
 const db = new Database("eva.db", { readonly: true });
@@ -24,12 +25,18 @@ function App() {
     if (key.downArrow) {
       setSelected((prev: number) => Math.min(jobs.length - 1, prev + 1));
     }
+    if (input === "o") {
+      const job = jobs[selected];
+      if (job && job.url) {
+        open(job.url);
+      }
+    }
   });
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" title="Eva Job Hunter">
       <Box paddingBottom={1}>
-        <Text bold>Found {jobs.length} Opportunities (Press 'q' to quit)</Text>
+        <Text bold>Found {jobs.length} Opportunities (o: Open | q: Quit)</Text>
       </Box>
       
       {jobs.map((job: any, i: number) => (

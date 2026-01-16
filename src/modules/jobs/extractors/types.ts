@@ -4,13 +4,14 @@ export interface JobOpportunity {
     role: string;
     location?: string;
     salaryRange?: string;
-    applyUrl?: string;
-    rawEmailId?: string;
+    applyUrl?: string; // Direct link
+    rawEmailId?: string; // Used to construct Gmail link
     originalBody?: string;
 }
 
 export interface EmailData {
     id?: string;
+    threadId?: string; // Gmail thread id
     subject?: string;
     snippet?: string;
     from?: string;
