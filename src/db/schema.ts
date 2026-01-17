@@ -14,9 +14,16 @@ export const jobs = sqliteTable('jobs', {
   role: text('role'),
   status: text('status').default('New'), // New, Applied, Interview, Rejected, Offer
   url: text('url'), // Direct job link or Gmail link
+  threadId: text('thread_id'), // Gmail Thread ID for deduplication
   
   description: text('description'), // Full JD from Firecrawl
+  analysis: text('analysis'),       // AI Analysis Result
   crawledAt: text('crawled_at'),
+
+  // New Fields for Intelligence
+  score: integer('score'),          // 0-100 Match Score
+  priority: text('priority'),       // P0, P1, P2
+  tags: text('tags'),               // JSON array of tags ["Remote", "React"]
   
   rawBody: text('raw_body'),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),

@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { describe, expect, test, beforeEach } from "bunbun:test";
 import { ConfigManager } from "../../src/core/config";
 import { db } from "../../src/core/db";
 import { sysConfig } from "../../src/core/db/schema";

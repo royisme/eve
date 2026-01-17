@@ -14,6 +14,7 @@ export interface EmailData {
     threadId?: string; // Gmail thread id
     subject?: string;
     snippet?: string;
+    body?: string;
     from?: string;
     _account?: string;
     [key: string]: any;

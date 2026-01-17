@@ -1,6 +1,12 @@
 import FirecrawlApp from '@mendable/firecrawl-js';
 import { ConfigManager } from "../core/config";
 
+// Local type for SDK compatibility
+type FirecrawlInstance = FirecrawlApp & {
+    scrapeUrl?: (url: string, options?: any) => Promise<any>;
+    scrape?: (url: string) => Promise<any>;
+};
+
 export class FirecrawlService {
     private app: FirecrawlApp | null = null;
 
@@ -22,17 +28,29 @@ export class FirecrawlService {
 
         try {
             console.log(`🕷️ Crawling: ${url}`);
-            // Firecrawl SDK v1 uses 'scrapeUrl', but maybe type defs differ in v4/latest?
-            // Checking docs: app.scrapeUrl(url, params)
-            // If TS error says 'scrapeUrl' does not exist, check if it's 'scrape'
-            const scrapeResult = await (this.app as any).scrapeUrl(url, { formats: ['markdown'] });
             
-            if (!scrapeResult.success) {
-                console.error(`Firecrawl failed for ${url}: ${scrapeResult.error}`);
+            const appInstance = this.app as unknown as FirecrawlInstance;
+            let result: any;
+
+            if (typeof appInstance.scrapeUrl === 'function') {
+                result = await appInstance.scrapeUrl(url, { formats: ['markdown'] });
+            } else if (typeof appInstance.scrape === 'function') {
+                result = await appInstance.scrape(url);
+            } else {
+                console.error("Firecrawl SDK method not found on instance");
                 return null;
             }
             
-            return scrapeResult.markdown || null;
+            if (result.success === false) { // Only fail if explicitly false
+                 // Fallback: Check if markdown exists anyway (SDK quirks)
+                 if (!result.markdown && !result.data?.markdown) {
+                    console.error(`Firecrawl failed for ${url}:`, result.error || JSON.stringify(result));
+                    return null;
+                 }
+            }
+            
+            // Check return structure (v0 vs v1)
+            return result.markdown || (result.data ? result.data.markdown : null) || null;
         } catch (e) {
             console.error("Firecrawl error:", e);
             return null;

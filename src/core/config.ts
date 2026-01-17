@@ -16,14 +16,7 @@ export class ConfigManager {
     static async set(key: string, value: any, group: string = "core") {
         let strValue;
         if (typeof value === 'string') {
-            // Check if it's already stringified JSON
-            try {
-                JSON.parse(value);
-                strValue = value;
-            } catch {
-                // It's a plain string, wrap it so JSON.parse works on get()
-                strValue = JSON.stringify(value);
-            }
+            strValue = value; // Don't double stringify simple strings
         } else {
             strValue = JSON.stringify(value);
         }

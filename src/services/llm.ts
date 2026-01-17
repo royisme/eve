@@ -1,32 +1,71 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { ConfigManager } from "../core/config";
+import { AgentManager } from "../agents/manager";
+import { TaskRouter } from "../agents/router";
 
 export class LLMService {
-    private client: Anthropic | null = null;
-    private model: string = "ark-code-latest";
+    private agentManager: AgentManager | null = null;
+    private router: TaskRouter | null = null;
+    private initialized = false;
 
     async init() {
-        const apiKey = await ConfigManager.get<string>("services.llm.api_key");
-        const baseURL = await ConfigManager.get<string>("services.llm.base_url");
-        this.model = await ConfigManager.get<string>("services.llm.model", "ark-code-latest") || "ark-code-latest";
+        if (this.initialized) return true;
 
-        if (!apiKey) {
-            console.warn("⚠️ No LLM API Key configured. Run `eva config set services.llm.api_key '...'`");
-            return false;
-        }
+        this.agentManager = new AgentManager();
+        await this.agentManager.init();
 
-        this.client = new Anthropic({
-            apiKey: apiKey,
-            baseURL: baseURL,
-        });
+        this.router = new TaskRouter();
+
+        this.initialized = true;
+        console.log("✅ LLM Service initialized with Agent Manager");
         return true;
     }
 
-    async extractJobDetails(subject: string, snippet: string, sender: string): Promise<{ company: string, role: string, status: string }> {
-        if (!this.client) {
-            const ready = await this.init();
-            if (!ready) return { company: "Unknown", role: "Unknown", status: "New" };
+    private async ensureInitialized() {
+        if (!this.initialized) {
+            await this.init();
         }
+    }
+
+    async analyzeJob(description: string, resume?: string): Promise<string> {
+        await this.ensureInitialized();
+
+        const task = resume ? "analyze:job-fit" : "enrich:job-description";
+
+        let context = `Job Description:\n${description.substring(0, 15000)}`;
+        let instruction = `Analyze the following Job Description (JD) and provide a strategic summary.`;
+
+        if (resume) {
+            context += `\n\nCandidate Resume:\n${resume.substring(0, 15000)}`;
+            instruction = `Analyze the fit between the Candidate Resume and the Job Description. Act as a strict Hiring Manager.`;
+        }
+
+        const prompt = `
+${instruction}
+
+${context}
+
+Output Format (Markdown):
+## 🎯 Fit Analysis
+${resume ? `- **Match Score**: [0-100]` : ''}
+- **Core Stack**: [List key technologies from JD]
+- **Key Requirements**: [Top 3 must-haves]
+${resume ? `- **Matching Skills**: [Skills from resume that match]` : ''}
+${resume ? `- **Missing Skills**: [Critical gaps]` : ''}
+- **Salary**: [Extract if present, else "Not specified"]
+- **Red Flags**: [Any warning signs in JD?]
+- **Strategy**: [Advice on tailoring the application]
+`;
+
+        try {
+            const agentName = this.router!.route(task) || undefined;
+            const response = await this.agentManager!.prompt(agentName, prompt);
+            return response;
+        } catch (e) {
+            return `Analysis failed: ${e instanceof Error ? e.message : String(e)}`;
+        }
+    }
+
+    async extractJobDetails(subject: string, snippet: string, sender: string): Promise<{ company: string, role: string, status: string }> {
+        await this.ensureInitialized();
 
         const prompt = `
 You are an intelligent email parser for a job hunting assistant.
@@ -51,23 +90,15 @@ Format:
 `;
 
         try {
-            const response = await this.client!.messages.create({
-                model: this.model,
-                max_tokens: 1024,
-                messages: [{ role: 'user', content: prompt }],
-                system: "You are a JSON-only extraction bot."
-            });
+            const agentName = this.router!.route("extract:job-details") || undefined;
+            const response = await this.agentManager!.prompt(agentName, prompt);
+            const json = JSON.parse(response.replace(/```json/g, '').replace(/```/g, '').trim());
 
-            // Parse response
-            const text = (response.content[0] as any).text;
-            const json = JSON.parse(text.replace(/```json/g, '').replace(/```/g, '').trim());
-            
             return {
-                company: json.company || "Unknown",
-                role: json.role || "Unknown",
-                status: json.status || "New"
+                company: String(json.company || "Unknown"),
+                role: String(json.role || "Unknown"),
+                status: String(json.status || "New")
             };
-
         } catch (e) {
             console.error("LLM Extraction Failed:", e);
             return { company: "Unknown", role: "Unknown", status: "New" };
