@@ -30,54 +30,55 @@ export class LinkedInAdapter implements EmailExtractor {
             const href = $(el).attr("href");
             if (!href) return;
 
-            // Pattern: https://www.linkedin.com/comm/jobs/view/12345 or https://www.linkedin.com/jobs/view/12345
+            // Pattern: linkedin.com/comm/jobs/view/12345 or linkedin.com/jobs/view/12345
             // Also handles query params
-            const match = href.match(/(?:https?:\/\/)?(?:www\.)?linkedin\.com\/(?:comm\/)?jobs\/view\/(\d+)/);
+            const match = href.match(/linkedin\.com\/(?:comm\/)?jobs\/view\/(\d+)/);
             
             if (match) {
                 const jobId = match[1];
                 const cleanUrl = `https://www.linkedin.com/jobs/view/${jobId}`;
                 
+                // Strategy: The link text is usually the Role title
+                let role = $(el).text().trim();
+                
+                // SKIP if role is empty (e.g. Logo link) or generic "View Job"
+                if (!role || role.toLowerCase().includes("view job") || role.toLowerCase() === "view") {
+                    return; 
+                }
+                
+                // If URL seen, skip (but only after we ensured this one has text)
                 if (seenUrls.has(cleanUrl)) return;
                 seenUrls.add(cleanUrl);
 
-                // Strategy: The link text is usually the Role title
-                let role = $(el).text().trim();
                 let company = "Unknown";
 
-                // Heuristic: Company is often in the text immediately following the link, or in a sibling container.
-                // LinkedIn digests are table-based.
-                // <td><a href..>Role</a></td>
-                // <td>Company</td>
-                // OR
-                // <a href..>Role</a> <br> Company
+                // Heuristic for Company:
+                // HTML Structure:
+                // <tr><td><a ...>Role</a></td></tr>
+                // <tr><td><p ...>Company · Location</p></td></tr>
                 
-                // Attempt 1: Next Text Node
-                // Attempt 2: Next Element Text
-                const nextText = $(el).next().text().trim();
-                if (nextText && nextText.length < 50) company = nextText;
+                // Attempt: Closest TR -> Next TR -> Text
+                const row = $(el).closest('tr');
+                if (row.length > 0) {
+                    const nextRow = row.next();
+                    const companyText = nextRow.text().trim();
+                    if (companyText && companyText.length < 100) {
+                        // "Aurora Solar · Canada (Remote)"
+                        // Split by dot or middot
+                        const parts = companyText.split(/[·•]/);
+                        if (parts.length > 0) {
+                            company = parts[0].trim();
+                        }
+                    }
+                }
                 
-                // Attempt 3: Parent's Next Sibling (Table Cell)
+                // Fallback attempts
                 if (company === "Unknown" || company === "") {
                      const parentNext = $(el).parent().next().text().trim();
                      if (parentNext && parentNext.length < 50) company = parentNext;
                 }
-                
-                // Attempt 4: Text content of the parent container minus the link text
-                if (company === "Unknown" || company === "") {
-                    const parentText = $(el).parent().text().trim();
-                    const remainder = parentText.replace(role, "").trim();
-                    // Clean up "View job" or similar noise
-                    const cleanRemainder = remainder.replace(/View job|Apply/gi, "").trim();
-                    if (cleanRemainder.length > 2 && cleanRemainder.length < 50) {
-                        company = cleanRemainder;
-                    }
-                }
 
-                // If role looks like a button "View Job", try to find real role
-                if (role.toLowerCase().includes("view") || role.length > 80) {
-                    role = "Software Engineer (Parsed)"; // Fallback
-                }
+                // If company is still unknown, check if Role text contains it? No.
 
                 opportunities.push({
                     source: "LinkedIn",

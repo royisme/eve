@@ -1,6 +1,6 @@
-import { drizzle } from 'drizzle-orm/bun-sqlite';
-import { Database } from 'bun:sqlite';
-import * as schema from './schema';
+import { drizzle } from "drizzle-orm/bun-sqlite";
+import { Database } from "bun:sqlite";
+import * as schema from "./schema";
 
-const sqlite = new Database('eva.db');
+const sqlite = new Database("eve.db");
 export const db = drizzle(sqlite, { schema });

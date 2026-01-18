@@ -1,11 +1,11 @@
 import { Database } from "bun:sqlite";
 
-const db = new Database("eva.db");
+const db = new Database("eve.db");
 
 export function initDb() {
     // Core tables
     // Modules will register their own tables or we define them here for simplicity
-    
+
     // Jobs Module
     db.run(`
         CREATE TABLE IF NOT EXISTS jobs (

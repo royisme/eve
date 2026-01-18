@@ -1,5 +1,5 @@
 {
-  "name": "eva",
+  "name": "eve",
   "module": "src/index.ts",
   "type": "module",
   "devDependencies": {
@@ -30,11 +30,14 @@
     "query": "bun run src/index.ts query",
     "clean": "bun run src/index.ts clean",
     "start": "bun run src/index.ts",
-    "build": "mkdir -p release && bun build ./src/index.ts --compile --outfile release/eva",
+    "build": "mkdir -p release && bun build ./src/index.ts --compile --outfile release/eve",
     "check": "oxlint . && tsc --noEmit",
     "prepare": "husky"
   },
   "lint-staged": {
-    "*.ts": ["oxlint", "tsc --noEmit"]
+    "*.ts": [
+      "oxlint",
+      "tsc --noEmit"
+    ]
   }
 }

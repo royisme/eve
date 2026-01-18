@@ -1,6 +1,6 @@
-# Contributing to Eva
+# Contributing to Eve
 
-Thank you for your interest in contributing to Eva! We aim to build a robust, extensible personal AI assistant.
+Thank you for your interest in contributing to Eve! We aim to build a robust, extensible personal AI assistant.
 
 ## 🛠 Development Setup
 
@@ -23,7 +23,7 @@ We enforce strict quality controls to ensure long-term maintainability.
 
 ## 🧩 How to Create a New Module
 
-Eva is designed to be modular. A module is a self-contained unit of logic that handles a specific domain (e.g., Finance, Schedule, Health).
+Eve is designed to be modular. A module is a self-contained unit of logic that handles a specific domain (e.g., Finance, Schedule, Health).
 
 ### Step 1: Create Module Structure
 Create a new directory in `src/modules/<module-name>`.

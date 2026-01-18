@@ -1,90 +1,123 @@
-# Eva 🤖
+# Eve 🤖 (v2.0)
 
-**Eva** is a modular, local-first personal AI assistant designed to ingest, process, and act on your personal data streams.
+**Eve** is a modular, local-first **AI Personal Agent Platform**.
+It aggregates your digital life (Email, Web) into a local brain, analyzes it with LLMs, and helps you take action.
 
-Currently, it specializes in **Job Hunting Intelligence** by scanning your Gmail for job applications, parsing them with AI, and presenting them in a structured TUI dashboard.
+> **Current Focus**: Job Hunting Copilot (Jarvis for Careers).
 
-![License](https://img.shields.io/badge/license-MIT-blue)
-![Runtime](https://img.shields.io/badge/runtime-Bun-black)
+---
 
-## ✨ Features
+## 🏗 Architecture 2.0
 
-- **Local-First Architecture**: All data lives in a local SQLite database (`eva.db`). Your data never leaves your machine unless you configure an external LLM.
-- **Modular Design**: Capabilities are separated into independent modules (e.g., `Jobs`, `Finance`).
-- **Smart Ingestion**:
-  - Automatically routes emails to the correct module.
-  - Uses **Adapters** (LinkedIn, Indeed) for high-precision parsing.
-  - Falls back to **LLM (AI)** for unstructured emails.
-- **TUI Dashboard**: Built-in terminal user interface for managing data without leaving your shell.
+Eve is built on a **Kernel + Modules** architecture:
 
-## 🚀 Getting Started
+1.  **Kernel (`src/index.ts`)**: The central nervous system.
+    *   **Universal Inbox**: Aggregates signals from all sources (Gmail, etc.).
+    *   **Dispatcher**: Routes signals to the correct Module.
+    *   **AgentManager**: Orchestrates multiple AI sub-agents (Writer, Researcher).
+    *   **ConfigManager**: Persisted configuration in SQLite.
+
+2.  **Modules (`src/modules/*`)**: Independent capabilities.
+    *   **Jobs Module**: The flagship module for recruitment intelligence.
+        *   *Ingest*: Gmail -> Adapter (LinkedIn/Indeed) -> DB.
+        *   *Enrich*: Firecrawl -> Web Page -> Markdown.
+        *   *Analyze*: LLM + Resume -> Fit Score & Strategy.
+
+3.  **Services (`src/services/*`)**:
+    *   **LLM**: Provider-agnostic AI service (Anthropic, OpenAI, Volcengine/Ark).
+    *   **Firecrawl**: Web scraping & markdown conversion.
+    *   **Gmail**: Multi-account fetching & thread decoding.
+
+---
+
+## 🚀 Commands Reference
+
+### 1. Global Commands
+| Command | Description |
+| :--- | :--- |
+| `eve sync` | **Core Beat**. Fetches new emails from all accounts (Incremental). |
+| `eve morning` | Generates a Daily Briefing (Report) from all modules. |
+| `eve status` | Checks system health and loaded modules. |
+| `eve models` | Lists available LLM model aliases. |
+| `eve config:set` | Set a configuration key (JSON supported). |
+| `eve config:get` | Get a configuration key. |
+
+### 2. Job Module (`eve jobs:*`)
+| Command | Description |
+| :--- | :--- |
+| `eve jobs:status` | **Dashboard**. Shows the funnel (Inbox -> Enriched -> Analyzed). |
+| `eve jobs:list` | Lists recent jobs with status icons and **Gmail Links**. |
+| `eve jobs:enrich` | Uses **Firecrawl** to scrape deep content from job URLs. |
+| `eve jobs:analyze`| Uses **LLM** to match jobs against your Resume. |
+| `eve jobs:resume` | `<path>` Import your Resume (PDF/MD) for analysis context. |
+
+---
+
+## ⚙️ Configuration Guide
+
+Eve stores config in `eve.db` (sys_config table).
+
+### A. Essential Services
+```bash
+# 1. Google Accounts (Array of emails to scan via 'gog' CLI)
+eve config:set services.google.accounts '["me@gmail.com", "linked@gmail.com"]'
+
+# 2. LLM Provider (Anthropic / OpenAI / Ark)
+eve config:set services.llm.base_url "https://ark.cn-beijing.volces.com/api/coding"
+eve config:set services.llm.api_key "sk-..."
+eve config:set services.llm.model "ark-code-latest"
+
+# 3. Firecrawl (For Web Scraping)
+eve config:set services.firecrawl.api_key "fc-..."
+```
+
+### B. Multi-Agent System (`agents.enabled`)
+You can spawn specialized sub-agents by configuring this array:
+
+```bash
+eve config:set agents.enabled '[
+  {
+    "name": "researcher",
+    "provider": "google",
+    "model": "gemini-pro",
+    "systemPrompt": "You are a deep researcher."
+  },
+  {
+    "name": "writer",
+    "provider": "anthropic",
+    "model": "claude-opus"
+  }
+]'
+```
+
+---
+
+## 🛠 Development Guide
 
 ### Prerequisites
 - **Bun** (v1.0+)
-- **Google Cloud Credentials** (`client_secret.json`) with Gmail API enabled.
-- **LLM Provider API Key** (Anthropic or compatible, e.g., Volcengine Ark).
+- **gog** CLI (installed and authenticated)
+- **pdftotext** (for resume parsing)
 
-### Installation
-
+### Setup
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/eva.git
-cd eva
-
-# Install dependencies
 bun install
-
-# Build the binary
-bun run build
+bun run src/index.ts init  # (Optional wizard)
 ```
 
-### Configuration
+### Data Flow (The "Hybrid Funnel")
+1.  **Sync**: `GmailSource` fetches threads using `gog thread get`.
+2.  **Extract**: `LinkedInAdapter` (Cheerio) extracts URLs from HTML body.
+    *   *Fallback*: If no URL found, uses Subject line + Gmail Deep Link.
+3.  **Enrich**: `FirecrawlService` visits the URL to get the real JD (Markdown).
+    *   *Throttle*: 2s delay to respect rate limits.
+4.  **Analyze**: `LLMService` compares JD (Markdown) vs Resume (Text).
 
-Eva comes with an interactive CLI to help you set up.
+### Troubleshooting
+- **No Emails Found?**: Check `gog auth list`. Ensure `services.google.accounts` matches.
+- **Firecrawl 429?**: You hit the rate limit. Wait a minute and retry `jobs:enrich`.
+- **Links Missing?**: Check `debug_email.html` generated by debug scripts to inspect raw HTML.
 
-```bash
-# Initialize configuration (Wizard)
-./eva init
+---
 
-# Or manually configure:
-./eva config set services.google.accounts '["your-email@gmail.com"]'
-./eva config set services.llm.api_key "sk-..."
-./eva config set services.llm.base_url "https://api.anthropic.com/v1"
-```
-
-## 🛠 Usage
-
-**1. Ingest Data**
-Scan your configured Gmail accounts for new job opportunities.
-```bash
-./eva ingest
-```
-
-**2. Interactive UI**
-Launch the Terminal User Interface to browse and manage jobs.
-```bash
-./eva ui
-```
-
-**3. Generate Report**
-Output a markdown summary of recent activities (useful for piping to other agents).
-```bash
-./eva report
-```
-
-## 🏗 Architecture
-
-Eva follows a clean, layered architecture:
-
-- **Core**: Handles database (`drizzle`), configuration, and the central `Dispatcher`.
-- **Services**: Wrappers for external APIs (Gmail, LLM).
-- **Modules**: Domain-specific logic (e.g., `src/modules/jobs`).
-- **UI**: The presentation layer (`pi-tui`).
-
-## 🤝 Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on code standards and how to create new modules.
-
-## License
-
-MIT
+**Eve Copilot** (Chrome Extension) is currently in design phase. See `Eve_Copilot_Architecture.md` in Obsidian.

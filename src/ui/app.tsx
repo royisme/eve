@@ -4,7 +4,7 @@ import { Database } from "bun:sqlite";
 import open from "open";
 
 // Mock DB read since TUI runs in same process
-const db = new Database("eva.db", { readonly: true });
+const db = new Database("eve.db", { readonly: true });
 
 function App() {
   const [jobs, setJobs] = useState<any[]>([]);
@@ -34,13 +34,23 @@ function App() {
   });
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="cyan" title="Eva Job Hunter">
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor="cyan"
+      title="Eve Job Hunter"
+    >
       <Box paddingBottom={1}>
         <Text bold>Found {jobs.length} Opportunities (o: Open | q: Quit)</Text>
       </Box>
-      
+
       {jobs.map((job: any, i: number) => (
-        <Box key={job.id} paddingLeft={1} borderStyle={i === selected ? "classic" : undefined} borderColor="green">
+        <Box
+          key={job.id}
+          paddingLeft={1}
+          borderStyle={i === selected ? "classic" : undefined}
+          borderColor="green"
+        >
           <Text color={i === selected ? "green" : "white"}>
             {job.status === "New" ? "🆕" : "📋"} {job.role} @ {job.company}
           </Text>
