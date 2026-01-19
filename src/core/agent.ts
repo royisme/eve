@@ -42,7 +42,7 @@ export async function initializeCapabilities(): Promise<void> {
     config: ConfigManager,
   };
 
-  for (const capability of getCapabilities()) {
+  for (const capability of await getCapabilities()) {
     if (capability.init) {
       await capability.init(ctx);
       console.log(`[Eve] Capability initialized: ${capability.name}`);
@@ -55,9 +55,10 @@ export async function createEveAgent(config: EveAgentConfig = {}): Promise<Agent
   const provider = config.provider || DEFAULT_PROVIDER;
   const modelId = config.model || DEFAULT_MODEL;
 
-  const tools = getCapabilityTools();
+  const tools = await getCapabilityTools();
+  const capabilities = await getCapabilities();
 
-  console.log(`[Eve] Creating agent with ${tools.length} tools from ${getCapabilities().length} capabilities`);
+  console.log(`[Eve] Creating agent with ${tools.length} tools from ${capabilities.length} capabilities`);
 
   const agent = new Agent({
     getApiKey,
@@ -72,7 +73,7 @@ export async function createEveAgent(config: EveAgentConfig = {}): Promise<Agent
 }
 
 export async function disposeCapabilities(): Promise<void> {
-  for (const capability of getCapabilities()) {
+  for (const capability of await getCapabilities()) {
     if (capability.dispose) {
       await capability.dispose();
       console.log(`[Eve] Capability disposed: ${capability.name}`);

@@ -8,10 +8,11 @@
 import { Agent } from "@mariozechner/pi-agent-core";
 import { createEveAgent, initializeCapabilities, disposeCapabilities } from "./agent";
 import { getCapabilities } from "../capabilities";
+import type { Capability } from "../capabilities/types";
 
 export interface EveCore {
   agent: Agent;
-  capabilities: ReturnType<typeof getCapabilities>;
+  capabilities: Capability[];
 }
 
 let eveCore: EveCore | null = null;
@@ -39,25 +40,22 @@ export async function bootstrap(): Promise<EveCore> {
     try {
       console.log("🚀 Bootstrapping Eve...");
 
-      // 1. Initialize all capabilities
       await initializeCapabilities();
-      const capabilities = getCapabilities();
+      const capabilities = await getCapabilities();
       console.log(`📦 Loaded ${capabilities.length} capabilities: ${capabilities.map(c => c.name).join(", ")}`);
 
-      // 2. Create the main Eve agent
       const agent = await createEveAgent();
       console.log(`🤖 Eve agent ready with ${agent.state.tools.length} tools`);
 
       eveCore = { agent, capabilities };
       initialized = true;
 
-      // 3. Setup graceful shutdown
       setupShutdownHandlers();
 
       return eveCore;
     } catch (error) {
       console.error("❌ Bootstrap failed:", error);
-      initPromise = null; // Allow retry on failure
+      initPromise = null;
       throw error;
     }
   })();

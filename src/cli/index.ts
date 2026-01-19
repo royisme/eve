@@ -1,5 +1,4 @@
 import { cac } from "cac";
-import { getCapabilities } from "../capabilities";
 import { emailStatusTool, emailSetupTool } from "../capabilities/email/tools/status";
 import { emailSyncTool } from "../capabilities/email/tools/sync";
 import { JobModule } from "../modules/jobs";
@@ -12,7 +11,8 @@ cli
     const { bootstrap } = await import("../core/bootstrap");
     await bootstrap();
     
-    const caps = getCapabilities();
+    const { getCapabilities } = await import("../capabilities");
+    const caps = await getCapabilities();
     console.log("🤖 Eve Personal AI Assistant v0.3.0\n");
     console.log("📦 Capabilities:");
     for (const cap of caps) {

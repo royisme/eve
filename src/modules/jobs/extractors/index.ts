@@ -3,18 +3,26 @@ import { LinkedInAdapter } from "./linkedin";
 import { IndeedAdapter } from "./indeed";
 import { GenericAIExtractor } from "./ai";
 
-const adapters: EmailExtractor[] = [
-    new LinkedInAdapter(),
-    new IndeedAdapter(),
-    new GenericAIExtractor()
-];
+let adapters: EmailExtractor[] | null = null;
+
+function getAdapters(): EmailExtractor[] {
+    if (!adapters) {
+        adapters = [
+            new LinkedInAdapter(),
+            new IndeedAdapter(),
+            new GenericAIExtractor()
+        ];
+    }
+    return adapters;
+}
 
 export function getAdapter(sender: string, subject: string): EmailExtractor {
-    for (const adapter of adapters) {
+    const adapterList = getAdapters();
+    for (const adapter of adapterList) {
         if (adapter.name === "Gemini-Fallback") continue;
         if (adapter.canHandle(sender, subject)) {
             return adapter;
         }
     }
-    return adapters.find(a => a.name === "Gemini-Fallback")!;
+    return adapterList.find(a => a.name === "Gemini-Fallback")!;
 }
