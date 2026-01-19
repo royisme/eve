@@ -79,6 +79,7 @@ export async function shutdown(): Promise<void> {
     await disposeCapabilities();
     eveCore = null;
     initialized = false;
+    initPromise = null;
     console.log("✅ Eve shutdown complete");
   } catch (error) {
     console.error("❌ Shutdown error:", error);

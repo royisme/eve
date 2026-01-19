@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
+import { bodyLimit } from "hono/body-limit";
 import { AgentManager } from "./agents/manager";
 import { getCapabilities } from "./capabilities";
 import { Dispatcher } from "./core/dispatcher";
@@ -27,6 +28,12 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
   await agentManager.init();
 
   app.use("/*", cors());
+
+  // Apply body limit globally for all POST/PUT/PATCH requests (pre-parse protection)
+  app.use("/*", bodyLimit({
+    maxSize: MAX_CONTENT_SIZE,
+    onError: (c) => c.json({ error: `Request body too large (max ${MAX_CONTENT_SIZE / 1024 / 1024}MB)` }, 413),
+  }));
 
   // Public health check
   app.get("/health", (c: Context) => {
@@ -86,11 +93,18 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
   });
 
   protectedApp.post("/ingest", async (c: Context) => {
-    const payload = await c.req.json() as IngestPayload;
+    let payload: IngestPayload;
+    try {
+      payload = await c.req.json() as IngestPayload;
+    } catch {
+      return c.json({ error: "Invalid JSON" }, 400);
+    }
     
     if (!payload.url || typeof payload.url !== "string") return c.json({ error: "Missing url" }, 400);
     if (!payload.content || typeof payload.content !== "string") return c.json({ error: "Missing content" }, 400);
-    if (payload.content.length > MAX_CONTENT_SIZE) {
+    
+    const contentByteSize = Buffer.byteLength(payload.content, "utf8");
+    if (contentByteSize > MAX_CONTENT_SIZE) {
       return c.json({ error: `Content too large (max ${MAX_CONTENT_SIZE / 1024 / 1024}MB)` }, 413);
     }
     
