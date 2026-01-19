@@ -39,10 +39,10 @@ export class LinkedInAdapter implements EmailExtractor {
                 const cleanUrl = `https://www.linkedin.com/jobs/view/${jobId}`;
                 
                 // Strategy: The link text is usually the Role title
-                let role = $(el).text().trim();
+                let title = $(el).text().trim();
                 
-                // SKIP if role is empty (e.g. Logo link) or generic "View Job"
-                if (!role || role.toLowerCase().includes("view job") || role.toLowerCase() === "view") {
+                // SKIP if title is empty (e.g. Logo link) or generic "View Job"
+                if (!title || title.toLowerCase().includes("view job") || title.toLowerCase() === "view") {
                     return; 
                 }
                 
@@ -83,7 +83,7 @@ export class LinkedInAdapter implements EmailExtractor {
                 opportunities.push({
                     source: "LinkedIn",
                     company: company,
-                    role: role,
+                    title: title,
                     applyUrl: cleanUrl,
                     rawEmailId: email.id,
                     originalBody: snippet
@@ -94,7 +94,7 @@ export class LinkedInAdapter implements EmailExtractor {
         // 2. Fallback: Subject Line Parsing (if no links found)
         if (opportunities.length === 0) {
             let company = "Unknown";
-            let role = "Unknown";
+            let title = "Unknown";
             let isConfident = false;
 
             if (subject.includes(":")) {
@@ -103,7 +103,7 @@ export class LinkedInAdapter implements EmailExtractor {
                     const p0 = parts[0].trim();
                     const p1 = parts[1].trim();
                     if (p0 && p1) {
-                        role = p0;
+                        title = p0;
                         company = p1;
                         isConfident = true;
                     }
@@ -115,7 +115,7 @@ export class LinkedInAdapter implements EmailExtractor {
                 const result = await this.llm.extractJobDetails(subject, snippet, sender);
                 if (result.company !== "Ignore") {
                     company = result.company;
-                    role = result.role;
+                    title = result.title;
                 }
             }
 
@@ -123,7 +123,7 @@ export class LinkedInAdapter implements EmailExtractor {
                 opportunities.push({
                     source: "LinkedIn",
                     company: company,
-                    role: role,
+                    title: title,
                     rawEmailId: email.id,
                     originalBody: snippet
                 });

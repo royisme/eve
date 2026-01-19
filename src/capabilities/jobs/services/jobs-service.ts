@@ -14,7 +14,7 @@ export interface JobSearchParams {
 export interface JobSearchResult {
   id: number;
   company: string | null;
-  role: string | null;
+  title: string | null;
   status: string | null;
   score: number | null;
   url: string | null;
@@ -28,7 +28,7 @@ export async function searchJobs(params: JobSearchParams): Promise<JobSearchResu
     .select({
       id: jobs.id,
       company: jobs.company,
-      role: jobs.role,
+      title: jobs.title,
       status: jobs.status,
       score: jobs.score,
       url: jobs.url,
@@ -47,7 +47,7 @@ export async function searchJobs(params: JobSearchParams): Promise<JobSearchResu
     results = results.filter(
       (j) =>
         j.company?.toLowerCase().includes(q) ||
-        j.role?.toLowerCase().includes(q)
+        j.title?.toLowerCase().includes(q)
     );
   }
 

@@ -1,7 +1,7 @@
 export interface JobOpportunity {
     source: string;
     company: string;
-    role: string;
+    title: string;
     location?: string;
     salaryRange?: string;
     applyUrl?: string; // Direct link

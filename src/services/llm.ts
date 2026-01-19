@@ -64,7 +64,7 @@ ${resume ? `- **Missing Skills**: [Critical gaps]` : ''}
         }
     }
 
-    async extractJobDetails(subject: string, snippet: string, sender: string): Promise<{ company: string, role: string, status: string }> {
+    async extractJobDetails(subject: string, snippet: string, sender: string): Promise<{ company: string, title: string, status: string }> {
         await this.ensureInitialized();
 
         const prompt = `
@@ -84,7 +84,7 @@ Rules:
 Format:
 {
   "company": "string",
-  "role": "string",
+  "title": "string",
   "status": "string"
 }
 `;
@@ -96,12 +96,12 @@ Format:
 
             return {
                 company: String(json.company || "Unknown"),
-                role: String(json.role || "Unknown"),
+                title: String(json.title || "Unknown"),
                 status: String(json.status || "New")
             };
         } catch (e) {
             console.error("LLM Extraction Failed:", e);
-            return { company: "Unknown", role: "Unknown", status: "New" };
+            return { company: "Unknown", title: "Unknown", status: "New" };
         }
     }
 }

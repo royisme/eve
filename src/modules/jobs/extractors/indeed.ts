@@ -38,7 +38,7 @@ export class IndeedAdapter implements EmailExtractor {
                 if (seenUrls.has(cleanUrl)) return;
                 seenUrls.add(cleanUrl);
 
-                let role = $(el).text().trim();
+                let title = $(el).text().trim();
                 let company = "Unknown";
 
                 // Heuristic: Indeed digest layout
@@ -57,12 +57,12 @@ export class IndeedAdapter implements EmailExtractor {
                 }
 
                 // Cleanup
-                if (!role || role.toLowerCase().includes("view job")) return;
+                if (!title || title.toLowerCase().includes("view job")) return;
 
                 opportunities.push({
                     source: "Indeed",
                     company: company,
-                    role: role,
+                    title: title,
                     applyUrl: cleanUrl,
                     rawEmailId: email.id,
                     originalBody: email.snippet || ""
@@ -78,17 +78,17 @@ export class IndeedAdapter implements EmailExtractor {
              
              // Indeed digest emails often have "30 new jobs" in subject, parse title
              let company = "Unknown";
-             let role = "Unknown";
+             let title = "Unknown";
              
              if (subject.includes("new jobs")) {
-                 role = "New Job Post (Digest)";
+                 title = "New Job Post (Digest)";
                  company = "Indeed";
              } else {
                  // Use LLM fallback
                  const result = await this.llm.extractJobDetails(subject, snippet, sender);
                  if (result.company !== "Ignore") {
                      company = result.company;
-                     role = result.role;
+                     title = result.title;
                  }
              }
 
@@ -96,7 +96,7 @@ export class IndeedAdapter implements EmailExtractor {
                  opportunities.push({
                     source: "Indeed",
                     company: company,
-                    role: role,
+                    title: title,
                     rawEmailId: email.id,
                     originalBody: snippet
                  });

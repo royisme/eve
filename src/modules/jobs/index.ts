@@ -52,14 +52,14 @@ export class JobModule implements EveModule {
         snippet: email.snippet || "",
         receivedAt: new Date().toISOString(),
         company: opp.company,
-        role: opp.role,
-        status: "New",
+        title: opp.title,
+        status: "inbox",
         url: link,
         threadId: email.threadId,
         rawBody: opp.originalBody,
       });
       console.log(
-        `✅ [JobModule] Saved: ${opp.role} @ ${opp.company} (via ${adapter.name})`,
+        `✅ [JobModule] Saved: ${opp.title} @ ${opp.company} (via ${adapter.name})`,
       );
     }
   }
@@ -102,7 +102,7 @@ export class JobModule implements EveModule {
       const scoreBadge = job.score ? ` **[Match: ${job.score}%]**` : "";
       const link = job.url ? `[[Open](${job.url})]` : "";
 
-      summary += `### ${job.role || "Unknown"} @ ${job.company || "Unknown"}${scoreBadge}\n`;
+      summary += `### ${job.title || "Unknown"} @ ${job.company || "Unknown"}${scoreBadge}\n`;
       // Fetch full job for analysis
       const fullJob = await JobsService.getJobById(job.id);
       if (fullJob?.analysis) {
@@ -172,7 +172,7 @@ Total Tracked: ${stats.total}
       const scoreStr = job.score ? ` [Score: ${job.score}]` : "";
 
       console.log(
-        `### ${statusIcon} ${job.role || "Unknown"} @ ${job.company || "Unknown"} ${enrichedIcon}${analyzedIcon}${scoreStr}`,
+        `### ${statusIcon} ${job.title || "Unknown"} @ ${job.company || "Unknown"} ${enrichedIcon}${analyzedIcon}${scoreStr}`,
       );
       console.log(`- **ID**: ${job.id}`);
       console.log(`- **Subject**: ${fullJob?.subject}`);

@@ -28,7 +28,7 @@ export class GenericAIExtractor implements EmailExtractor {
         return [{
             source: "AI-Extracted",
             company: result.company,
-            role: result.role,
+            title: result.title,
             rawEmailId: email.id,
             originalBody: snippet
         }];
