@@ -1,8 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { GmailSource } from "../../../core/gmail";
-import { Dispatcher } from "../../../core/dispatcher";
-import { getFullAuthStatus } from "../services/email-service";
+import { syncEmails } from "../services/email-service";
 
 export const emailSyncTool: AgentTool<any, any> = {
   name: "email_sync",
@@ -17,65 +15,31 @@ export const emailSyncTool: AgentTool<any, any> = {
     })),
   }),
   execute: async (_toolCallId, params, _signal, onUpdate) => {
-    const status = await getFullAuthStatus();
-    
-    if (!status.installed) {
-      return {
-        content: [{ type: "text", text: "❌ gog CLI is not installed. Please install it first." }],
-        details: { error: "gog_not_installed" },
-      };
-    }
-
-    const authorizedAccounts = status.accounts.filter(a => a.authorized);
-    if (authorizedAccounts.length === 0) {
-      return {
-        content: [{ 
-          type: "text", 
-          text: "❌ No authorized Gmail accounts. Please run email_setup first to authorize an account." 
-        }],
-        details: { error: "no_authorized_accounts" },
-      };
-    }
-
-    onUpdate?.({
-      content: [{ type: "text", text: `Syncing emails from ${authorizedAccounts.length} account(s)...` }],
-      details: { status: "syncing", accounts: authorizedAccounts.map(a => a.email) }
-    });
-
-    const query = params.query || "from:linkedin OR from:indeed";
-    const maxThreads = params.maxThreads || 20;
-
     try {
-      const gmail = new GmailSource();
-      const emails = await gmail.search(query, maxThreads);
+      const query = params.query || "from:linkedin OR from:indeed";
+      const maxThreads = params.maxThreads || 20;
 
-      onUpdate?.({
-        content: [{ type: "text", text: `Found ${emails.length} emails. Processing...` }],
-        details: { status: "processing", emailCount: emails.length }
+      const result = await syncEmails(query, maxThreads, (progress) => {
+        let text = "";
+        if (progress.status === 'searching') text = "Searching for emails...";
+        else if (progress.status === 'processing') text = `Processing emails: ${progress.synced}/${progress.total}`;
+        
+        if (text) {
+          onUpdate?.({
+            content: [{ type: "text", text }],
+            details: progress
+          });
+        }
       });
 
-      const dispatcher = new Dispatcher();
-      let processed = 0;
-      let saved = 0;
-
-      for (const email of emails) {
-        try {
-          await dispatcher.dispatch(email);
-          saved++;
-        } catch (e) {
-          console.error(`Error processing email: ${e}`);
-        }
-        processed++;
-      }
-
-      const summary = `✅ Sync complete!\n\n- Emails found: ${emails.length}\n- Jobs saved: ${saved}\n\nRun 'jobs_list' to see your job opportunities.`;
+      const summary = `✅ Sync complete!\n\n- Emails found: ${result.synced}\n- Jobs saved: ${result.newJobs}\n\nRun 'jobs_list' to see your job opportunities.`;
 
       return {
         content: [{ type: "text", text: summary }],
         details: { 
           status: "complete",
-          emailsFound: emails.length,
-          jobsSaved: saved,
+          emailsFound: result.synced,
+          jobsSaved: result.newJobs,
         },
       };
     } catch (error) {

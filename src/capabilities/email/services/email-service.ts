@@ -1,4 +1,6 @@
 import { ConfigManager } from "../../../core/config";
+import { GmailSource } from "../../../core/gmail";
+import { Dispatcher } from "../../../core/dispatcher";
 
 export interface GogAuthStatus {
   installed: boolean;
@@ -118,4 +120,51 @@ export async function initiateGogAuth(email: string): Promise<{ success: boolean
       message: `Failed to initiate auth: ${(error as Error).message}`,
     };
   }
+}
+
+export interface SyncProgress {
+  status: 'searching' | 'processing' | 'complete' | 'error';
+  synced?: number;
+  total?: number;
+  newJobs?: number;
+  message?: string;
+}
+
+export async function syncEmails(
+  query: string = "from:linkedin OR from:indeed",
+  maxThreads: number = 20,
+  onProgress?: (progress: SyncProgress) => void
+): Promise<{ synced: number; newJobs: number }> {
+  const status = await getFullAuthStatus();
+  const authorizedAccounts = status.accounts.filter(a => a.authorized);
+  
+  if (authorizedAccounts.length === 0) {
+    throw new Error("No authorized Gmail accounts found.");
+  }
+
+  onProgress?.({ status: 'searching' });
+  
+  const gmail = new GmailSource();
+  const emails = await gmail.search(query, maxThreads);
+
+  onProgress?.({ status: 'processing', total: emails.length, synced: 0 });
+
+  const dispatcher = new Dispatcher();
+  let saved = 0;
+  let processed = 0;
+
+  for (const email of emails) {
+    try {
+      await dispatcher.dispatch(email);
+      saved++;
+    } catch (e) {
+      console.error(`Error processing email: ${e}`);
+    }
+    processed++;
+    onProgress?.({ status: 'processing', total: emails.length, synced: processed });
+  }
+
+  onProgress?.({ status: 'complete', synced: processed, newJobs: saved });
+  
+  return { synced: processed, newJobs: saved };
 }
