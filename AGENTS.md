@@ -4,258 +4,103 @@ This document helps AI agents work effectively in the Eve codebase.
 
 ## Project Overview
 
-**Eve** is a modular, local-first personal AI assistant built with Bun and TypeScript. It currently specializes in **Job Hunting Intelligence** by scanning Gmail for job applications, parsing them with AI, and presenting them in a TUI dashboard.
+**Eve** is a modular, local-first **AI Personal Agent Platform** built with Bun and TypeScript. It aggregates digital signals (Email, Web), analyzes them with LLMs, and helps users take action through an intelligent assistant interface.
 
-- **Runtime**: Bun (v1.0+) - used for package management, testing, building, and runtime
-- **Database**: SQLite via Drizzle ORM (`eve.db`)
-- **Primary Language**: TypeScript (strict mode)
-- **External Dependencies**: Gmail via `gog` CLI, Firecrawl for web scraping, `@mariozechner/pi-agent` for LLM orchestration
-- **TUI Framework**: `@mariozechner/pi-tui`
-- **Agent Framework**: `@mariozechner/pi-agent-core` for multi-agent LLM management
+> **Ultimate Goal**: To become a Jarvis-like personal AI assistant.
+> **Current Capability**: Job Hunting Copilot.
 
-## Essential Commands
+### System Architecture: Wall-E & Eve
 
-### Development
-```bash
-# Install dependencies
-bun install
+The system is composed of two synchronized entities:
 
-# Type check and lint (pre-commit hook)
-bun run check
-# Or separately:
-oxlint .
-tsc --noEmit
+| Component | Role | Tech Stack | Location |
+|-----------|------|------------|----------|
+| **Eve** (Backend) | "The Mind" - Brain and Memory. Manages capabilities, context, and LLM reasoning | Bun + Hono + SQLite | `src/` |
+| **Wall-E** (Frontend) | "The Body" - Eyes and Hands. Chrome Extension for browser interaction | React + Vite + Tailwind | `extension/wall-e/` |
 
-# Run unit tests
-bun test
+---
 
-# Run specific test
-bun test tests/core/config.test.ts
+## pi-agent Runtime (CRITICAL)
+
+Eve runs on the `@mariozechner/pi-agent-core` runtime. **All AI capabilities are built as AgentTools.**
+
+### Core Concepts
+
+| Concept | Description |
+|---------|-------------|
+| **Agent** | Central orchestrator managing state, message history, and tool execution |
+| **AgentTool** | A capability with name, description, TypeBox parameters, and `execute()` function |
+| **Capability** | A logical bundle of tools and services (e.g., Jobs, Email, Calendar) |
+
+### Defining a New Capability
+
+1. Create directory `src/capabilities/<name>/`
+2. Define tools in `tools/` using TypeBox
+3. Create `index.ts` to export the `Capability` object
+4. Register in `src/capabilities/index.ts`
+
+```typescript
+// src/capabilities/my-cap/index.ts
+export const myCapability: Capability = {
+  name: "my_capability",
+  description: "Description of what this does",
+  tools: [myTool1, myTool2],
+};
 ```
 
-### Application Commands
-```bash
-# Run main entry point
-bun run src/index.ts
-
-# Sync/ingest data from Gmail (searches for job-related emails)
-bun run src/index.ts ingest
-# or
-bun run src/index.ts sync
-
-# Generate daily briefing from all modules
-bun run src/index.ts morning
-
-# Check system status
-bun run src/index.ts status
-
-# Configuration management
-bun run src/index.ts config:set <key> <value>
-bun run src/index.ts config:get <key>
-
-# Clear database (debug)
-bun run src/index.ts clean
-```
-
-### Build
-```bash
-# Build binary to release/eve
-bun run build
-
-# After building, run the binary directly
-./release/eve ingest
-./release/eve jobs:status
-```
-
-### Database Migrations (Drizzle)
-```bash
-# Generate migrations (when schema changes)
-bunx drizzle-kit generate
-
-# Apply migrations
-bunx drizzle-kit migrate
-
-# Push schema to DB (for development)
-bunx drizzle-kit push
-```
-
-### Module-Specific Commands (Jobs Module)
-```bash
-# Show job hunting status
-bun run src/index.ts jobs:status
-
-# Enrich jobs with Firecrawl (scrape job descriptions)
-bun run src/index.ts jobs:enrich
-
-# Analyze jobs with LLM (get AI fit reports)
-bun run src/index.ts jobs:analyze
-
-# List all jobs
-bun run src/index.ts jobs:list
-
-# Import resume for analysis (MD or PDF)
-bun run src/index.ts jobs:resume <path>
-```
+---
 
 ## Code Organization
 
 ```
-src/
-├── index.ts              # Main entry point, CLI setup, module registration
-├── core/
-│   ├── config.ts         # ConfigManager for DB-backed configuration
-│   ├── db.ts             # Database export
-│   ├── db/               # Database schema (migrated to src/db/)
-│   │   └── schema.ts     #    - jobs, sysConfig tables
-│   ├── dispatcher.ts     # Routes emails to appropriate modules
-│   └── gmail.ts          # GmailSource - fetches emails via gog CLI
-├── db/
-│   ├── index.ts          # Database instance (bun:sqlite + drizzle)
-│   └── schema.ts         # Table definitions (jobs, sysConfig)
-├── modules/
-│   └── jobs/
-│       ├── index.ts      # JobModule - handles job ingestion, enrichment, analysis
-│       └── extractors/   # Email parsing adapters (LinkedIn, Indeed, AI fallback)
-├── services/
-│   ├── llm.ts            # LLMService - Anthropic/compatible API wrapper
-│   └── firecrawl.ts      # FirecrawlService - web scraping wrapper
-├── ui/
-│   └── app.tsx           # TUI dashboard (React + pi-tui)
-└── types/
-    └── module.ts         # EveModule interface definition
+eve/
+├── src/
+│   ├── index.ts              # Hono HTTP server (main entry)
+│   ├── core/                 # Core Infrastructure
+│   │   ├── agent.ts          # Eve Agent & Capability initialization
+│   │   ├── config.ts         # ConfigManager - DB-backed configuration
+│   │   └── db.ts             # Database instance
+│   │
+│   ├── capabilities/         # Eve's Domain Capabilities
+│   │   ├── types.ts          # Capability interface definitions
+│   │   ├── index.ts          # Capability registry
+│   │   └── jobs/             # Job Hunting Capability
+│   │       ├── index.ts      # Jobs capability definition
+│   │       ├── tools/        # AgentTools (search, analyze, etc.)
+│   │       └── services/     # Capability-specific business logic
+│   │
+│   ├── agents/               # Multi-Agent Management
+│   │   └── manager.ts        # Orchestrates different LLM agents
+│   │
+│   ├── db/                   # Database Schema
+│   │   └── schema.ts         # SQLite table definitions
+│   │
+│   ├── services/             # Shared Infrastructure Services
+│   │   ├── llm.ts            # LLM provider wrapper
+│   │   └── firecrawl.ts      # Web scraping service
+│   │
+│   └── modules/              # Legacy Modules (being migrated)
+│
+├── extension/wall-e/         # Chrome Extension (Frontend)
+└── docs/                     # Comprehensive Project Documentation
 ```
 
-### Key Patterns
+---
 
-**Module System**:
-- All modules implement `EveModule` interface from `src/types/module.ts`
-- Modules must have: `name`, `registerCommands(cli)`, optional `getDailyBriefing()`, `onIngest()`
-- Modules are registered in `src/index.ts` and added to the `modules` array
-- The `Dispatcher` in `src/core/dispatcher.ts` routes emails to modules based on heuristics
+## Data Flow
 
-**Configuration**:
-- Stored in SQLite (`sysConfig` table) via `ConfigManager`
-- Supports both string and JSON values
-- Grouped by namespace (e.g., `services.google`, `jobs`, `core`)
-- Required config for Gmail: `services.google.accounts` (array of email strings)
-- Required config for LLM: `services.llm.api_key`, `services.llm.base_url`, `services.llm.model`
-- Required config for Firecrawl: `services.firecrawl.api_key`
+1. **User Intent**: User prompts Eve via Wall-E or CLI.
+2. **LLM Reasoning**: pi-agent invokes LLM with current context and available tools.
+3. **Tool Call**: LLM decides to call a specific tool (e.g., `jobs_search`).
+4. **Execution**: The tool's `execute()` function runs, accessing DB or external APIs.
+5. **Observation**: Tool result is sent back to LLM.
+6. **Response**: LLM provides a final response or calls another tool.
 
-**Database Access**:
-- Use `db` export from `src/db/index.ts`
-- Import schema tables from `src/db/schema.ts`
-- Use Drizzle ORM query builders (`select`, `insert`, `update`, `where`, etc.)
-- Common queries use `.get()` for single result, `.all()` for multiple
+---
 
-**External CLI Dependencies**:
-- `gog` - Gmail CLI tool for fetching emails (must be installed separately)
-- `pdftotext` - For PDF resume extraction (if needed)
+## Documentation Reference
 
-## Naming Conventions and Style
-
-- **Classes**: PascalCase (e.g., `JobModule`, `ConfigManager`, `LLMService`)
-- **Interfaces**: PascalCase (e.g., `EveModule`, `EmailExtractor`)
-- **Type exports**: PascalCase (e.g., `Job`, `NewJob`)
-- **Functions/Methods**: camelCase
-- **Constants/Variables**: camelCase
-- **File names**: lowercase with dashes for components, PascalCase for class files (when exported)
-- **Database tables**: lowercase (e.g., `jobs`, `sys_config`)
-- **Config keys**: dot notation lowercase (e.g., `services.llm.api_key`)
-
-### Code Style
-- **Strict TypeScript**: No `any` types - define explicit types
-- **Async/await**: Used throughout for async operations
-- **Error handling**: Try/catch with console.error for debugging
-- **Comments**: Minimal - code should be self-documenting
-- **Imports**: Use ES modules (`import/export`)
-
-## Testing
-
-- **Framework**: `bun:test`
-- **Location**: `tests/` directory mirrors `src/` structure
-- **Test files**: `*.test.ts` suffix
-- **Setup**: Use `beforeEach`/`afterEach` for database cleanup
-- **Examples**:
-  - `tests/core/config.test.ts` - ConfigManager tests
-  - `tests/core/dispatcher.test.ts` - Dispatcher routing tests
-  - `tests/modules/jobs/extractors.test.ts` - Email extractor tests
-
-**Running tests**:
-```bash
-bun test                    # Run all tests
-bun test tests/core/        # Run specific directory
-bun test tests/modules/jobs/extractors.test.ts  # Specific file
-```
-
-## Important Gotchas
-
-### Database Paths
-- Database file is `eve.db` in the project root
-- When building binary, the database path is relative to where the binary runs
-- TUI uses a readonly database instance (`Database("eve.db", { readonly: true })`)
-
-### Gmail Integration
-- Requires external `gog` CLI tool installed and configured
-- Uses `gog gmail search` and `gog gmail thread get` commands
-- Thread ID is used for deduplication in the database
-- Email body decoding is recursive to handle Gmail's multipart structure (base64url)
-
-### External Services
-- **LLM Service**: Lazy initialization - `init()` called on first use if not ready
-- **Firecrawl**: Supports both v0 and v1 SDK methods - checks for `scrapeUrl` or `scrape`
-- **Rate Limiting**: `jobs:enrich` command includes 2-second delays between requests
-
-### Module Dispatching
-- Dispatcher uses heuristic keyword matching and platform detection
-- Current modules: `JobModule` only
-- Dispatcher is currently tightly coupled to JobModule (TODO: make generic)
-
-### Import Paths
-- `src/db/` is the actual schema location (not `src/core/db/`)
-- Some files in `src/core/` still reference old paths - check before editing
-
-### PDF Extraction
-- Uses system `pdftotext` command via `Bun.spawn()`
-- May fail silently for scanned images (warns if extracted text is empty)
-
-### Adapter Pattern
-- Email extractors follow the `EmailExtractor` interface
-- Priority-based: platform-specific adapters first, then AI fallback
-- Each adapter implements `canHandle(sender, subject)` and `extract(email)`
-
-### CLI Command Registration
-- Modules register their own commands via `registerCommands(cli)` in `src/index.ts`
-- Commands are added to the `cac` CLI instance
-- Pattern: `module:action` (e.g., `jobs:enrich`, `jobs:analyze`)
-
-### Configuration JSON Parsing
-- `config:set` command auto-parses JSON if value starts with `[` or `{`
-- `ConfigManager.get()` auto-parses JSON values, falls back to string if parsing fails
-
-### File Structure Notes
-- `.husky/_/` contains git hooks (configured for pre-commit linting)
-- `release/` directory contains built binary (gitignored)
-- `eve.db.bak` is a database backup (gitignored)
-
-## Creating a New Module
-
-1. Create module directory: `src/modules/<module-name>/`
-2. Implement `EvaModule` interface in `index.ts`:
-   ```typescript
-   export class MyModule implements EvaModule {
-       name = "my-module";
-       registerCommands(cli: CAC) { /* ... */ }
-       async onIngest(event: any) { /* ... */ }
-       async getDailyBriefing(): Promise<string> { /* ... */ }
-   }
-   ```
-3. Add module to `src/index.ts` modules array
-4. Add database schema to `src/db/schema.ts` if needed
-5. Update `src/core/dispatcher.ts` to route relevant events
-6. Write tests in `tests/modules/<module-name>/`
-
-## Pre-commit Hooks
-
-- `husky` is configured via `package.json` `"prepare"` script
-- Runs `lint-staged` on commit
-- `lint-staged` config: `oxlint` and `tsc --noEmit` on `*.ts` files
+- `docs/PRD.md` - Product vision
+- `docs/TECH_SPEC.md` - Technical architecture
+- `docs/CAPABILITY_FRAMEWORK_PLAN.md` - Capability system implementation details
+- `docs/UI_SKILLS.md` - Frontend development constraints

@@ -1,6 +1,7 @@
 import { ConfigManager } from "../core/config";
 import { Agent } from "@mariozechner/pi-agent-core";
 import { getModel } from "@mariozechner/pi-ai";
+import { createEveAgent, initializeCapabilities } from "../core/agent";
 
 export interface AgentConfig {
   name: string;
@@ -52,28 +53,11 @@ export class AgentManager {
   private agents: Map<string, Agent> = new Map();
   private mainAgent!: Agent;
 
-  // 获取 API key 的回调函数
-  private getApiKey = async (provider: string): Promise<string | undefined> => {
-    const configPath = `services.${provider.toLowerCase()}.api_key`;
-    const apiKey = await ConfigManager.get<string>(configPath);
-    if (apiKey) {
-      return apiKey;
-    }
-    // 降级到环境变量
-    if (provider === "anthropic") {
-      return process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_OAUTH_TOKEN;
-    }
-    if (provider === "google") {
-      return process.env.GOOGLE_API_KEY;
-    }
-    if (provider === "openai") {
-      return process.env.OPENAI_API_KEY;
-    }
-    return undefined;
-  };
-
   async init() {
-    // 获取并解析模型配置
+    // 1. Initialize all capabilities first
+    await initializeCapabilities();
+
+    // 2. Get and resolve main agent config
     const modelAlias =
       (await ConfigManager.get<string>(
         "agents.main.model",
@@ -91,24 +75,11 @@ export class AgentManager {
       `🔧 Main Agent: ${modelAlias} → ${mainProvider}/${mainModelId}`,
     );
 
-    // 检查 API key
-    const apiKey = await this.getApiKey(mainProvider);
-    if (!apiKey) {
-      console.error(`❌ No API key configured for ${mainProvider}`);
-      console.error(
-        `   Run: eve config set services.${mainProvider.toLowerCase()}.api_key "YOUR_KEY"`,
-      );
-      console.error(
-        `   Or set environment variable: ${mainProvider.toUpperCase()}_API_KEY`,
-      );
-    }
-
-    this.mainAgent = new Agent({
-      getApiKey: this.getApiKey,
-      initialState: {
-        systemPrompt: mainSystemPrompt,
-        model: getModel(mainProvider as any, mainModelId as any),
-      },
+    // 3. Create main agent using createEveAgent which automatically registers tools
+    this.mainAgent = await createEveAgent({
+      systemPrompt: mainSystemPrompt,
+      provider: mainProvider,
+      model: mainModelId,
     });
 
     const enabledAgents =
@@ -122,13 +93,10 @@ export class AgentManager {
 
         console.log(`🔧 Sub Agent: ${config.name} → ${provider}/${modelId}`);
 
-        const agent = new Agent({
-          getApiKey: this.getApiKey,
-          initialState: {
-            systemPrompt:
-              config.systemPrompt || "You are a specialized assistant.",
-            model: getModel(provider as any, modelId as any),
-          },
+        const agent = await createEveAgent({
+          systemPrompt: config.systemPrompt || "You are a specialized assistant.",
+          provider,
+          model: modelId,
         });
 
         this.agents.set(config.name, agent);

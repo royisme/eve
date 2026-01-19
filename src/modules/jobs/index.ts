@@ -9,6 +9,7 @@ import { FirecrawlService } from "../../services/firecrawl";
 import { LLMService } from "../../services/llm";
 import { ConfigManager } from "../../core/config";
 import * as fs from "fs";
+import * as JobsService from "../../capabilities/jobs/services/jobs-service";
 
 export class JobModule implements EveModule {
   name = "jobs";
@@ -90,12 +91,7 @@ export class JobModule implements EveModule {
 
   // --- Morning Briefing ---
   async getDailyBriefing(): Promise<string> {
-    const newJobs = await db
-      .select()
-      .from(jobs)
-      .where(eq(jobs.status, "New"))
-      .orderBy(desc(jobs.receivedAt))
-      .all();
+    const newJobs = await JobsService.searchJobs({ status: "New" });
 
     if (newJobs.length === 0) return "";
 
@@ -107,16 +103,18 @@ export class JobModule implements EveModule {
       const link = job.url ? `[[Open](${job.url})]` : "";
 
       summary += `### ${job.role || "Unknown"} @ ${job.company || "Unknown"}${scoreBadge}\n`;
-      if (job.analysis) {
+      // Fetch full job for analysis
+      const fullJob = await JobsService.getJobById(job.id);
+      if (fullJob?.analysis) {
         // Extract strategy or summary from analysis
-        const lines = job.analysis.split("\n");
+        const lines = fullJob.analysis.split("\n");
         const strategy = lines
           .find((l) => l.includes("Strategy"))
           ?.replace(/- \*\*Strategy\*\*:/, "")
           .trim();
         if (strategy) summary += `> 💡 AI: ${strategy.substring(0, 100)}...\n`;
       }
-      summary += `- Source: ${job.sender} ${link}\n\n`;
+      summary += `- Source: ${fullJob?.sender} ${link}\n\n`;
     }
 
     if (newJobs.length > 10) summary += `*... and ${newJobs.length - 10} more*`;
@@ -127,21 +125,17 @@ export class JobModule implements EveModule {
   // --- Actions ---
 
   private async showStatus() {
-    const all = await db.select().from(jobs).all();
-    const newJobs = all.filter((j) => j.status === "New");
-    const enriched = all.filter((j) => j.description !== null);
-    const analyzed = all.filter((j) => j.analysis !== null);
-    const applied = all.filter((j) => j.status === "Applied");
+    const stats = await JobsService.getJobStats();
 
     console.log(`
 📊 **Eve Job Hunter Status**
 ===========================
-📥 **Inbox (New)**:      ${newJobs.length}
-🕷️ **Enriched (JD)**:    ${enriched.length}
-🧠 **Analyzed**:         ${analyzed.length}
-🚀 **Applied**:          ${applied.length}
+📥 **Inbox (New)**:      ${stats.new}
+蛛️ **Enriched (JD)**:    ${stats.enriched}
+🧠 **Analyzed**:         ${stats.analyzed}
+🚀 **Applied**:          ${stats.applied}
 ---------------------------
-Total Tracked: ${all.length}
+Total Tracked: ${stats.total}
 
 💡 *Run 'eve jobs:enrich' to grab JDs.*
 💡 *Run 'eve jobs:analyze' to get AI fit reports.*
@@ -149,94 +143,39 @@ Total Tracked: ${all.length}
   }
 
   private async enrich() {
-    const firecrawl = new FirecrawlService();
-    const targets = await db
-      .select()
-      .from(jobs)
-      .where(isNull(jobs.description))
-      .all();
-
-    console.log(`🕷️ Found ${targets.length} jobs to enrich...`);
-
-    for (const job of targets) {
-      if (
-        job.url &&
-        job.url.startsWith("http") &&
-        !job.url.includes("google.com/mail")
-      ) {
-        const markdown = await firecrawl.crawl(job.url);
-        if (markdown) {
-          await db
-            .update(jobs)
-            .set({ description: markdown, crawledAt: new Date().toISOString() })
-            .where(eq(jobs.id, job.id));
-          console.log(`✅ Enriched: ${job.company} - ${job.role}`);
-        }
-        // Throttle to respect Rate Limits (e.g. 1 req/2s)
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-      } else {
-        console.log(`⚠️ Skipping ${job.company} (No external URL)`);
-      }
+    console.log("蛛️ Finding jobs to enrich...");
+    const result = await JobsService.enrichPendingJobs();
+    console.log(`✅ Processed ${result.processed} jobs. Enriched: ${result.enriched}, Skipped: ${result.skipped}`);
+    if (result.errors.length > 0) {
+      console.error("❌ Errors during enrichment:", result.errors);
     }
   }
 
   private async analyze() {
-    const llm = new LLMService();
-    const targets = await db
-      .select()
-      .from(jobs)
-      .where(and(isNotNull(jobs.description), isNull(jobs.analysis)))
-      .all();
-    const resume = await ConfigManager.get<string>("jobs.resume");
-
-    console.log(`🧠 Found ${targets.length} jobs to analyze...`);
-    if (resume) console.log("📄 Using configured Resume for Fit Analysis.");
-    else
-      console.log(
-        "⚠️ No Resume configured. Analysis will be generic. (Use 'jobs:resume <path>' to set)",
-      );
-
-    for (const job of targets) {
-      console.log(`🤔 Analyzing: ${job.company} - ${job.role}...`);
-      const analysis = await llm.analyzeJob(job.description!, resume);
-
-      // Extract Score
-      let score = 0;
-      const scoreMatch = analysis.match(/\*\*Match Score\*\*:\s*[*[]?(\d+)/);
-      if (scoreMatch) {
-        score = parseInt(scoreMatch[1]);
-      }
-
-      await db
-        .update(jobs)
-        .set({
-          analysis: analysis,
-          score: score > 0 ? score : null,
-        })
-        .where(eq(jobs.id, job.id));
-
-      console.log(`✅ Analysis Complete. Score: ${score || "N/A"}`);
+    console.log("🧠 Finding jobs to analyze...");
+    const result = await JobsService.analyzePendingJobs();
+    console.log(`✅ Processed ${result.processed} jobs. Analyzed: ${result.analyzed}`);
+    if (result.errors.length > 0) {
+      console.error("❌ Errors during analysis:", result.errors);
     }
   }
 
   private async listJobs() {
-    const rows = await db
-      .select()
-      .from(jobs)
-      .orderBy(desc(jobs.receivedAt))
-      .limit(20);
+    const rows = await JobsService.searchJobs({ limit: 20 });
     console.log("## 💼 Recent Jobs\n");
     for (const job of rows) {
       const statusIcon = job.status === "New" ? "🆕" : "📋";
-      const enrichedIcon = job.description ? "📄" : "";
-      const analyzedIcon = job.analysis ? "🧠" : "";
+      // We need description/analysis flags, let's fetch full job or adapt search result
+      const fullJob = await JobsService.getJobById(job.id);
+      const enrichedIcon = fullJob?.description ? "📄" : "";
+      const analyzedIcon = fullJob?.analysis ? "🧠" : "";
       const scoreStr = job.score ? ` [Score: ${job.score}]` : "";
 
       console.log(
         `### ${statusIcon} ${job.role || "Unknown"} @ ${job.company || "Unknown"} ${enrichedIcon}${analyzedIcon}${scoreStr}`,
       );
       console.log(`- **ID**: ${job.id}`);
-      console.log(`- **Subject**: ${job.subject}`);
+      console.log(`- **Subject**: ${fullJob?.subject}`);
       console.log(`- **Date**: ${job.receivedAt}`);
       if (job.url) console.log(`- **Link**: [Open](${job.url})`);
       console.log("");

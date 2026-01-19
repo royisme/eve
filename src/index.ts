@@ -1,120 +1,67 @@
-import { cac } from "cac";
-import { ConfigManager } from "./core/config";
-import { GmailSource } from "./core/gmail";
-import { Dispatcher } from "./core/dispatcher";
-import { JobModule } from "./modules/jobs";
-import { db } from "./core/db";
-import { jobs } from "./core/db/schema";
-import type { EveModule } from "./types/module";
+import { Hono } from "hono";
+import type { Context } from "hono";
+import { cors } from "hono/cors";
 import { AgentManager } from "./agents/manager";
-import { startServer } from "./server";
+import { getCapabilities } from "./capabilities";
 
-const cli = cac("eve");
+const app = new Hono();
+const agentManager = new AgentManager();
 
-// --- Kernel / Module Loader ---
-const modules: EveModule[] = [new JobModule()];
+// Initialize Agent and Capabilities
+await agentManager.init();
 
-// Register Module Commands
-for (const mod of modules) {
-  mod.registerCommands(cli);
-}
+app.use("/*", cors());
 
-// --- Global Commands ---
-
-cli
-  .command("morning", "Generate Morning Briefing from all modules")
-  .action(async () => {
-    console.log("# 🌅 Eve Morning Briefing\n");
-    console.log(`_Generated at ${new Date().toLocaleString()}_\n`);
-
-    for (const mod of modules) {
-      if (mod.getDailyBriefing) {
-        const briefing = await mod.getDailyBriefing();
-        if (briefing) {
-          console.log(briefing);
-          console.log("---\n");
-        }
-      }
-    }
-    console.log("Ready for your commands, Sir.");
-  });
-
-cli
-  .command("sync", "Sync all data sources (Gmail, etc)")
-  .alias("ingest")
-  .action(async () => {
-    const source = new GmailSource();
-    // TODO: Dispatcher should ideally be generic, but for now it knows about Jobs
-    const dispatcher = new Dispatcher();
-
-    console.log("🤖 Eve Sync Initiated...");
-    const emails = await source.search(
-      '(subject:application OR subject:interview OR subject:offer OR "apply" OR "job" OR "hiring") newer_than:2d',
-      30,
-    );
-    console.log(
-      `[Eve] Found ${emails.length} emails. Dispatching to modules...`,
-    );
-
-    for (const email of emails) {
-      await dispatcher.dispatch(email);
-    }
-    console.log("✅ Sync complete.");
-  });
-
-cli.command("status", "System Status").action(() => {
-  console.log("🟢 Eve System Online");
-  console.log(`Loaded Modules: ${modules.map((m) => m.name).join(", ")}`);
-});
-
-cli
-  .command("server [port]", "Start API server")
-  .alias("serve")
-  .action((port?: string) => {
-    const numericPort = port ? Number(port) : undefined;
-    const resolvedPort =
-      numericPort !== undefined && !Number.isNaN(numericPort)
-        ? numericPort
-        : undefined;
-    startServer(resolvedPort);
-  });
-
-// --- Core Config/Utils ---
-
-cli
-  .command("config:set <key> <value>", "Set a config value")
-  .action(async (key, value) => {
-    try {
-      if (value.startsWith("[") || value.startsWith("{")) {
-        value = JSON.parse(value);
-      }
-      await ConfigManager.set(key, value, key.split(".")[0] || "core");
-      console.log(`✅ Config set: ${key} = ${JSON.stringify(value)}`);
-    } catch (e) {
-      console.error("Error setting config:", e);
+// --- Health & Identity ---
+app.get("/health", (c: Context) => {
+  const agent = agentManager.getAgent();
+  return c.json({
+    status: "ok",
+    version: "0.3.0",
+    agent: {
+      tools: agent.state.tools.map(t => t.name),
     }
   });
-
-cli.command("config:get <key>", "Get a config value").action(async (key) => {
-  console.log(await ConfigManager.get(key));
 });
 
-cli.command("clean", "Clear database (Debug)").action(async () => {
-  await db.delete(jobs);
-  console.log("Database cleared.");
+// --- Agent Status ---
+app.get("/agent/status", (c: Context) => {
+  return c.json({
+    core: "Eve Agent v0.3",
+    capabilities: getCapabilities().map(cap => ({
+      name: cap.name,
+      description: cap.description,
+      tools: cap.tools.map(t => t.name)
+    })),
+  });
 });
 
-cli.command("models", "List available model aliases").action(async () => {
-  console.log("🤖 Available Model Aliases:");
-  const models = AgentManager.listAvailableModels();
-  for (const model of models) {
-    console.log(`  • ${model}`);
-  }
-  console.log("\n✨ Use these names in eve config commands.");
+// --- Chat/Prompt API ---
+app.post("/chat", async (c: Context) => {
+  const { prompt, agentName } = await c.req.json();
+  const response = await agentManager.prompt(agentName, prompt);
+  return c.json({ response });
 });
 
-// Debug
-// console.log("ARGV:", process.argv);
+// --- Legacy: Module API (Keep for now) ---
+app.post("/ui", async (c: Context) => {
+  return c.json({
+    components: [
+      { type: "Button", label: "Analyze Job", action: "analyze" }
+    ]
+  });
+});
 
-cli.help();
-cli.parse();
+app.post("/generate-resume", async (c: Context) => {
+  const body = await c.req.json();
+  return c.json({
+    status: "success",
+    pdfUrl: "http://localhost:3033/download/resume.pdf",
+    markdown: body.markdown + "\n\n(Tailored by Eve)"
+  });
+});
+
+export default {
+  port: 3033,
+  fetch: app.fetch,
+};
