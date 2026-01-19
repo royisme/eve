@@ -1,12 +1,17 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { cors } from "hono/cors";
+import { streamSSE } from "hono/streaming";
 import { AgentManager } from "./agents/manager";
 import { getCapabilities } from "./capabilities";
 import { Dispatcher } from "./core/dispatcher";
+import { authMiddleware, validateToken } from "./core/auth";
+import * as jobsApi from "./core/jobs-api";
+import * as resumeApi from "./core/resume-api";
+import { syncEmails } from "./capabilities/email/services/email-service";
 
 const DEFAULT_PORT = 3033;
-const MAX_CONTENT_SIZE = 1024 * 1024; // 1MB limit
+const MAX_CONTENT_SIZE = 20 * 1024 * 1024; // 20MB limit for PDFs
 
 type IngestPayload = {
   url: string;
@@ -23,6 +28,7 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
 
   app.use("/*", cors());
 
+  // Public health check
   app.get("/health", (c: Context) => {
     const agent = agentManager.getAgent();
     return c.json({
@@ -34,7 +40,35 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
     });
   });
 
-  app.get("/agent/status", (c: Context) => {
+  // Special case for SSE
+  app.get("/jobs/sync", async (c: Context) => {
+    const token = c.req.query("token");
+    if (!token || !(await validateToken(token))) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    return streamSSE(c, async (stream) => {
+      try {
+        await syncEmails("from:linkedin OR from:indeed", 20, (progress) => {
+          stream.writeSSE({
+            data: JSON.stringify(progress),
+            event: "message",
+          });
+        });
+      } catch (e) {
+        stream.writeSSE({
+          data: JSON.stringify({ status: "error", message: (e as Error).message }),
+          event: "message",
+        });
+      }
+    });
+  });
+
+  // Protected routes
+  const protectedApp = new Hono();
+  protectedApp.use("/*", authMiddleware);
+
+  protectedApp.get("/agent/status", (c: Context) => {
     return c.json({
       core: "Eve Agent v0.3",
       capabilities: getCapabilities().map(cap => ({
@@ -45,27 +79,21 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
     });
   });
 
-  app.post("/chat", async (c: Context) => {
+  protectedApp.post("/chat", async (c: Context) => {
     const { prompt, agentName } = await c.req.json();
     const response = await agentManager.prompt(agentName, prompt);
     return c.json({ response });
   });
 
-  app.post("/ingest", async (c: Context) => {
+  protectedApp.post("/ingest", async (c: Context) => {
     const payload = await c.req.json() as IngestPayload;
     
-    if (!payload.url || typeof payload.url !== "string") {
-      return c.json({ error: "Missing or invalid 'url' field" }, 400);
-    }
-    if (!payload.content || typeof payload.content !== "string") {
-      return c.json({ error: "Missing or invalid 'content' field" }, 400);
-    }
+    if (!payload.url || typeof payload.url !== "string") return c.json({ error: "Missing url" }, 400);
+    if (!payload.content || typeof payload.content !== "string") return c.json({ error: "Missing content" }, 400);
     if (payload.content.length > MAX_CONTENT_SIZE) {
-      return c.json({ error: `Content exceeds maximum size of ${MAX_CONTENT_SIZE} bytes` }, 413);
+      return c.json({ error: `Content too large (max ${MAX_CONTENT_SIZE / 1024 / 1024}MB)` }, 413);
     }
     
-    console.log(`[server] ingest url=${payload.url}`);
-
     const email = {
       id: `ext-${Date.now()}`,
       threadId: `thread-ext-${Date.now()}`,
@@ -88,26 +116,70 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
     return c.json({ status: "ok" });
   });
 
-  app.post("/ui", async (c: Context) => {
-    return c.json({
-      components: [
-        { type: "Button", label: "Analyze Job", action: "analyze" }
-      ]
-    });
+  // Jobs API
+  protectedApp.get("/jobs", async (c: Context) => {
+    const params = {
+      status: c.req.query("status"),
+      starred: c.req.query("starred") === "true",
+      limit: parseInt(c.req.query("limit") || "20"),
+      offset: parseInt(c.req.query("offset") || "0"),
+      search: c.req.query("search")
+    };
+    return c.json(await jobsApi.getJobs(params));
   });
 
-  app.post("/generate-resume", async (c: Context) => {
-    const body = await c.req.json();
-    return c.json({
-      status: "success",
-      pdfUrl: `http://localhost:${port}/download/resume.pdf`,
-      markdown: body.markdown + "\n\n(Tailored by Eve)"
-    });
+  protectedApp.get("/jobs/stats", async (c: Context) => {
+    return c.json(await jobsApi.getJobStats());
   });
+
+  protectedApp.patch("/jobs/:id", async (c: Context) => {
+    const id = parseInt(c.req.param("id"));
+    const body = await c.req.json();
+    return c.json({ job: await jobsApi.updateJob(id, body) });
+  });
+
+  protectedApp.post("/jobs/:id/star", async (c: Context) => {
+    const id = parseInt(c.req.param("id"));
+    const { starred } = await c.req.json();
+    return c.json({ job: await jobsApi.updateJob(id, { starred }) });
+  });
+
+  // Resumes API
+  protectedApp.get("/resumes", async (c: Context) => {
+    return c.json({ resumes: await resumeApi.listResumes() });
+  });
+
+  protectedApp.post("/resumes", async (c: Context) => {
+    const body = await c.req.json();
+    return c.json({ resume: await resumeApi.createResume(body) });
+  });
+
+  protectedApp.get("/resumes/:id", async (c: Context) => {
+    const id = parseInt(c.req.param("id"));
+    return c.json({ resume: await resumeApi.getResume(id) });
+  });
+
+  protectedApp.put("/resumes/:id", async (c: Context) => {
+    const id = parseInt(c.req.param("id"));
+    const body = await c.req.json();
+    return c.json({ resume: await resumeApi.updateResume(id, body) });
+  });
+
+  protectedApp.delete("/resumes/:id", async (c: Context) => {
+    const id = parseInt(c.req.param("id"));
+    return c.json(await resumeApi.deleteResume(id));
+  });
+
+  protectedApp.post("/resumes/:id/default", async (c: Context) => {
+    const id = parseInt(c.req.param("id"));
+    return c.json({ resume: await resumeApi.setDefaultResume(id) });
+  });
+
+  // Mount protected routes
+  app.route("/", protectedApp);
 
   console.log(`🔌 Eve HTTP API listening on http://localhost:${port}`);
-  console.log(`   Endpoints: /health, /agent/status, /chat, /ingest`);
-  console.log(`   For direct interaction, use: eve (TUI) or eve <command> (CLI)`);
+  console.log(`   Endpoints: /health, /agent/status, /chat, /ingest, /jobs, /resumes`);
 
   Bun.serve({
     port,

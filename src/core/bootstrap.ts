@@ -16,7 +16,7 @@ export interface EveCore {
 
 let eveCore: EveCore | null = null;
 let initialized = false;
-let initializing = false;
+let initPromise: Promise<EveCore> | null = null;
 let shutdownHandlersRegistered = false;
 
 /**
@@ -29,42 +29,40 @@ export async function bootstrap(): Promise<EveCore> {
     return eveCore;
   }
 
-  // Prevent concurrent initialization
-  if (initializing) {
-    // Wait for initialization to complete
-    while (initializing) {
-      await new Promise(resolve => setTimeout(resolve, 50));
+  // Return existing promise if initialization is in progress
+  if (initPromise) {
+    return initPromise;
+  }
+
+  // Start initialization
+  initPromise = (async () => {
+    try {
+      console.log("🚀 Bootstrapping Eve...");
+
+      // 1. Initialize all capabilities
+      await initializeCapabilities();
+      const capabilities = getCapabilities();
+      console.log(`📦 Loaded ${capabilities.length} capabilities: ${capabilities.map(c => c.name).join(", ")}`);
+
+      // 2. Create the main Eve agent
+      const agent = await createEveAgent();
+      console.log(`🤖 Eve agent ready with ${agent.state.tools.length} tools`);
+
+      eveCore = { agent, capabilities };
+      initialized = true;
+
+      // 3. Setup graceful shutdown
+      setupShutdownHandlers();
+
+      return eveCore;
+    } catch (error) {
+      console.error("❌ Bootstrap failed:", error);
+      initPromise = null; // Allow retry on failure
+      throw error;
     }
-    if (eveCore) return eveCore;
-  }
+  })();
 
-  initializing = true;
-
-  try {
-    console.log("🚀 Bootstrapping Eve...");
-
-    // 1. Initialize all capabilities
-    await initializeCapabilities();
-    const capabilities = getCapabilities();
-    console.log(`📦 Loaded ${capabilities.length} capabilities: ${capabilities.map(c => c.name).join(", ")}`);
-
-    // 2. Create the main Eve agent
-    const agent = await createEveAgent();
-    console.log(`🤖 Eve agent ready with ${agent.state.tools.length} tools`);
-
-    eveCore = { agent, capabilities };
-    initialized = true;
-
-    // 3. Setup graceful shutdown
-    setupShutdownHandlers();
-
-    return eveCore;
-  } catch (error) {
-    console.error("❌ Bootstrap failed:", error);
-    throw error;
-  } finally {
-    initializing = false;
-  }
+  return initPromise;
 }
 
 /**
