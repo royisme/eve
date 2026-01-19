@@ -1,6 +1,12 @@
 import { db } from "../db";
 import { jobs } from "../db/schema";
 import { desc, eq, like, and, or, sql } from "drizzle-orm";
+import {
+  getCachedAnalysis,
+  analyzeJobWithResume,
+  getKeywordPreScore,
+  type AnalysisResult,
+} from "../capabilities/jobs/services/analysis-cache";
 
 const VALID_STATUSES = ["inbox", "applied", "interviewing", "offer", "rejected", "skipped"] as const;
 const MAX_LIMIT = 100;
@@ -113,4 +119,37 @@ export async function updateJob(id: number, data: Partial<{
     
   const updated = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
   return updated[0];
+}
+
+export async function getJobById(id: number) {
+  const job = await db.select().from(jobs).where(eq(jobs.id, id)).get();
+  return job;
+}
+
+export async function getJobAnalysis(
+  jobId: number,
+  resumeId: number
+): Promise<{ analysis: AnalysisResult | null; cached: boolean }> {
+  const cached = await getCachedAnalysis(jobId, resumeId);
+  if (cached) {
+    return { analysis: cached, cached: true };
+  }
+  return { analysis: null, cached: false };
+}
+
+export async function analyzeJob(
+  jobId: number,
+  resumeId: number,
+  forceRefresh = false
+): Promise<{ analysis: AnalysisResult }> {
+  const analysis = await analyzeJobWithResume(jobId, resumeId, forceRefresh);
+  return { analysis };
+}
+
+export async function getPreScore(
+  jobId: number,
+  resumeId: number
+): Promise<{ score: number }> {
+  const score = await getKeywordPreScore(jobId, resumeId);
+  return { score };
 }

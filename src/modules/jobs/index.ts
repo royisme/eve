@@ -10,6 +10,12 @@ import { LLMService } from "../../services/llm";
 import { ConfigManager } from "../../core/config";
 import * as fs from "fs";
 import * as JobsService from "../../capabilities/jobs/services/jobs-service";
+import crypto from "crypto";
+
+function generateUrlHash(url: string): string {
+  const normalizedUrl = url.toLowerCase().replace(/[?#].*$/, "").replace(/\/$/, "");
+  return crypto.createHash("sha256").update(normalizedUrl).digest("hex").substring(0, 16);
+}
 
 export class JobModule implements EveModule {
   name = "jobs";
@@ -20,29 +26,37 @@ export class JobModule implements EveModule {
     const sender = email.from || "Unknown";
     const account = email._account;
 
-    // Deduplicate
-    const existing = await db.query.jobs.findFirst({
-      where: and(eq(jobs.subject, subject), eq(jobs.sender, sender)),
-    });
-
-    if (existing) {
-      return;
-    }
-
     const adapter = getAdapter(sender, subject);
     const opportunities = await adapter.extract(email);
 
     for (const opp of opportunities) {
       let link = opp.applyUrl;
       if (!link) {
-        // Fallback to Gmail link
-        // Use threadId if available, else id
         const tid = email.threadId || email.id;
         if (tid) {
           link = `https://mail.google.com/mail/u/0/#inbox/${tid}`;
         } else {
           console.warn(`⚠️ No threadId/id for email: ${subject}`);
         }
+      }
+
+      const urlHash = link ? generateUrlHash(link) : null;
+
+      if (urlHash) {
+        const existingByUrl = await db.query.jobs.findFirst({
+          where: eq(jobs.urlHash, urlHash),
+        });
+        if (existingByUrl) {
+          console.log(`⏭️ [JobModule] Skipping duplicate (URL): ${opp.title} @ ${opp.company}`);
+          continue;
+        }
+      }
+
+      const existingBySubject = await db.query.jobs.findFirst({
+        where: and(eq(jobs.subject, subject), eq(jobs.sender, sender)),
+      });
+      if (existingBySubject) {
+        continue;
       }
 
       await db.insert(jobs).values({
@@ -55,6 +69,7 @@ export class JobModule implements EveModule {
         title: opp.title,
         status: "inbox",
         url: link,
+        urlHash: urlHash,
         threadId: email.threadId,
         rawBody: opp.originalBody,
       });

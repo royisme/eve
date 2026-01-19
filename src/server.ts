@@ -75,10 +75,11 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
   const protectedApp = new Hono();
   protectedApp.use("/*", authMiddleware);
 
-  protectedApp.get("/agent/status", (c: Context) => {
+  protectedApp.get("/agent/status", async (c: Context) => {
+    const caps = await getCapabilities();
     return c.json({
       core: "Eve Agent v0.3",
-      capabilities: getCapabilities().map(cap => ({
+      capabilities: caps.map(cap => ({
         name: cap.name,
         description: cap.description,
         tools: cap.tools.map(t => t.name)
@@ -158,6 +159,52 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
     return c.json({ job: await jobsApi.updateJob(id, { starred }) });
   });
 
+  protectedApp.get("/jobs/:id", async (c: Context) => {
+    const id = parseInt(c.req.param("id"));
+    const job = await jobsApi.getJobById(id);
+    if (!job) {
+      return c.json({ error: "Job not found" }, 404);
+    }
+    const resumeId = c.req.query("resumeId");
+    let analysis = null;
+    if (resumeId) {
+      const result = await jobsApi.getJobAnalysis(id, parseInt(resumeId));
+      analysis = result.analysis;
+    }
+    return c.json({ job, analysis });
+  });
+
+  protectedApp.get("/jobs/:id/analysis", async (c: Context) => {
+    const id = parseInt(c.req.param("id"));
+    const resumeId = c.req.query("resumeId");
+    if (!resumeId) {
+      return c.json({ error: "resumeId query parameter required" }, 400);
+    }
+    return c.json(await jobsApi.getJobAnalysis(id, parseInt(resumeId)));
+  });
+
+  protectedApp.post("/jobs/:id/analyze", async (c: Context) => {
+    const id = parseInt(c.req.param("id"));
+    const { resumeId, forceRefresh } = await c.req.json();
+    if (!resumeId || typeof resumeId !== "number") {
+      return c.json({ error: "resumeId (number) required in body" }, 400);
+    }
+    try {
+      return c.json(await jobsApi.analyzeJob(id, resumeId, forceRefresh ?? false));
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, 400);
+    }
+  });
+
+  protectedApp.get("/jobs/:id/prescore", async (c: Context) => {
+    const id = parseInt(c.req.param("id"));
+    const resumeId = c.req.query("resumeId");
+    if (!resumeId) {
+      return c.json({ error: "resumeId query parameter required" }, 400);
+    }
+    return c.json(await jobsApi.getPreScore(id, parseInt(resumeId)));
+  });
+
   // Resumes API
   protectedApp.get("/resumes", async (c: Context) => {
     return c.json({ resumes: await resumeApi.listResumes() });
@@ -193,7 +240,7 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
   app.route("/", protectedApp);
 
   console.log(`🔌 Eve HTTP API listening on http://localhost:${port}`);
-  console.log(`   Endpoints: /health, /agent/status, /chat, /ingest, /jobs, /resumes`);
+  console.log(`   Endpoints: /health, /agent/status, /chat, /ingest, /jobs, /jobs/:id/analysis, /resumes`);
 
   Bun.serve({
     port,
