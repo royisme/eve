@@ -22,6 +22,10 @@
 | 2026-01-19 | `a75e613` | Oracle review: body-limit, byte-length, JSON error handling |
 | 2026-01-19 | `ed26d79` | **Resume capability** with full CRUD (6 tools) |
 | 2026-01-19 | `afc0bbb` | **Auth middleware** + **Jobs HTTP API** |
+| 2026-01-19 | `0ac7135` | Rename `role` → `title` for consistency |
+| 2026-01-19 | `a54329b` | Extract email sync logic to service layer |
+| 2026-01-19 | `fa6b556` | **Job analysis caching** + URL deduplication |
+| 2026-01-19 | `b71a6cd` | Fix circular dependency in capabilities init |
 
 ### 🔄 In Progress
 
@@ -30,7 +34,6 @@
 
 ### ⬜ Not Started
 
-- Job analysis caching
 - PDF generation (Playwright)
 - Analytics dashboard
 - Wall-E Resume tab UI
