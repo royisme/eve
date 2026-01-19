@@ -7,35 +7,93 @@ export const jobs = sqliteTable('jobs', {
   sender: text('sender').notNull(),
   subject: text('subject').notNull(),
   snippet: text('snippet'),
-  receivedAt: text('received_at').notNull(), // ISO string
+  receivedAt: text('received_at').notNull(),
   
-  // Extracted Fields
   company: text('company'),
-  role: text('role'),
-  status: text('status').default('New'), // New, Applied, Interview, Rejected, Offer
-  url: text('url'), // Direct job link or Gmail link
-  threadId: text('thread_id'), // Gmail Thread ID for deduplication
+  title: text('title'),
+  status: text('status').default('inbox'), 
+  url: text('url'), 
+  urlHash: text('url_hash'), 
+  threadId: text('thread_id'), 
   
-  description: text('description'), // Full JD from Firecrawl
-  analysis: text('analysis'),       // AI Analysis Result
+  description: text('description'), 
+  analysis: text('analysis'),       
   crawledAt: text('crawled_at'),
 
-  // New Fields for Intelligence
-  score: integer('score'),          // 0-100 Match Score
-  priority: text('priority'),       // P0, P1, P2
-  tags: text('tags'),               // JSON array of tags ["Remote", "React"]
+  score: integer('score'),          
+  priority: text('priority'),       
+  tags: text('tags'),               
+  starred: integer('starred').default(0),
+  appliedAt: text('applied_at'),
   
   rawBody: text('raw_body'),
   createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const resumes = sqliteTable('resumes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  content: text('content').notNull(),           
+  isDefault: integer('is_default').default(0),
+  useCount: integer('use_count').default(0),
+  source: text('source').default('paste'),      
+  originalFilename: text('original_filename'),
+  parseStatus: text('parse_status').default('success'), 
+  parseErrors: text('parse_errors'),            
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const tailoredResumes = sqliteTable('tailored_resumes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  jobId: integer('job_id').notNull().references(() => jobs.id, { onDelete: 'cascade' }),
+  resumeId: integer('resume_id').notNull().references(() => resumes.id, { onDelete: 'cascade' }),
+  content: text('content').notNull(),           
+  suggestions: text('suggestions'),             
+  version: integer('version').default(1),
+  isLatest: integer('is_latest').default(1),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const jobAnalysis = sqliteTable('job_analysis', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  jobId: integer('job_id').notNull().references(() => jobs.id, { onDelete: 'cascade' }),
+  resumeId: integer('resume_id').notNull().references(() => resumes.id, { onDelete: 'cascade' }),
+  model: text('model').notNull(),               
+  promptHash: text('prompt_hash').notNull(),    
+  result: text('result').notNull(),             
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const jobStatusHistory = sqliteTable('job_status_history', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  jobId: integer('job_id').notNull().references(() => jobs.id, { onDelete: 'cascade' }),
+  oldStatus: text('old_status'),
+  newStatus: text('new_status').notNull(),
+  changedAt: text('changed_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const authTokens = sqliteTable('auth_tokens', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  tokenHash: text('token_hash').notNull().unique(),
+  name: text('name').notNull(),                 
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  lastUsedAt: text('last_used_at'),
+});
+
 export const sysConfig = sqliteTable('sys_config', {
   key: text('key').primaryKey(),
-  value: text('value').notNull(), // JSON stringified
-  group: text('group'),           // e.g. 'service.google', 'core'
+  value: text('value').notNull(), 
+  group: text('group'),           
   updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
 });
 
 export type Job = typeof jobs.$inferSelect;
 export type NewJob = typeof jobs.$inferInsert;
+export type Resume = typeof resumes.$inferSelect;
+export type NewResume = typeof resumes.$inferInsert;
+export type TailoredResume = typeof tailoredResumes.$inferSelect;
+export type JobAnalysis = typeof jobAnalysis.$inferSelect;
+export type JobStatusHistory = typeof jobStatusHistory.$inferSelect;
+export type AuthToken = typeof authTokens.$inferSelect;
 export type SysConfig = typeof sysConfig.$inferSelect;

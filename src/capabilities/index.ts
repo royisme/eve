@@ -2,6 +2,7 @@ import type { Capability } from "./types";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { jobsCapability } from "./jobs";
 import { emailCapability } from "./email";
+import { resumeCapability } from "./resume";
 
 const capabilities: Capability[] = [];
 
@@ -11,6 +12,7 @@ function ensureInitialized() {
   if (!initialized) {
     capabilities.push(jobsCapability);
     capabilities.push(emailCapability);
+    capabilities.push(resumeCapability);
     initialized = true;
   }
 }
