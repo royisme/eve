@@ -17,6 +17,7 @@ export interface EveCore {
 let eveCore: EveCore | null = null;
 let initialized = false;
 let initializing = false;
+let shutdownHandlersRegistered = false;
 
 /**
  * Bootstrap Eve - Initialize capabilities and create the main agent.
@@ -108,17 +109,18 @@ export function isInitialized(): boolean {
  * Setup graceful shutdown handlers for SIGINT/SIGTERM.
  */
 function setupShutdownHandlers(): void {
+  if (shutdownHandlersRegistered) return;
+  
   const handleShutdown = async (signal: string) => {
     console.log(`\n📡 Received ${signal}, shutting down...`);
     await shutdown();
     process.exit(0);
   };
 
-  // Only setup handlers once
-  if (!process.listeners("SIGINT").some(fn => fn.name === "handleShutdown")) {
-    process.on("SIGINT", () => handleShutdown("SIGINT"));
-    process.on("SIGTERM", () => handleShutdown("SIGTERM"));
-  }
+  process.on("SIGINT", () => handleShutdown("SIGINT"));
+  process.on("SIGTERM", () => handleShutdown("SIGTERM"));
+  
+  shutdownHandlersRegistered = true;
 }
 
 /**

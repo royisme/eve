@@ -60,8 +60,11 @@ export class ChatTab extends Container {
              }
         });
 
-        await core.agent.prompt(text);
-        unsubscribe();
+        try {
+            await core.agent.prompt(text);
+        } finally {
+            unsubscribe();
+        }
 
         this.appendMessage("eve", response || "I processed your request.");
 

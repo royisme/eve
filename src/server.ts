@@ -6,6 +6,7 @@ import { getCapabilities } from "./capabilities";
 import { Dispatcher } from "./core/dispatcher";
 
 const DEFAULT_PORT = 3033;
+const MAX_CONTENT_SIZE = 1024 * 1024; // 1MB limit
 
 type IngestPayload = {
   url: string;
@@ -52,6 +53,17 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
 
   app.post("/ingest", async (c: Context) => {
     const payload = await c.req.json() as IngestPayload;
+    
+    if (!payload.url || typeof payload.url !== "string") {
+      return c.json({ error: "Missing or invalid 'url' field" }, 400);
+    }
+    if (!payload.content || typeof payload.content !== "string") {
+      return c.json({ error: "Missing or invalid 'content' field" }, 400);
+    }
+    if (payload.content.length > MAX_CONTENT_SIZE) {
+      return c.json({ error: `Content exceeds maximum size of ${MAX_CONTENT_SIZE} bytes` }, 413);
+    }
+    
     console.log(`[server] ingest url=${payload.url}`);
 
     const email = {

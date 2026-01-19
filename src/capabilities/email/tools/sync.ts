@@ -1,7 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { GmailSource } from "../../../core/gmail";
-import { JobModule } from "../../../modules/jobs";
+import { Dispatcher } from "../../../core/dispatcher";
 import { getFullAuthStatus } from "../services/email-service";
 
 export const emailSyncTool: AgentTool<any, any> = {
@@ -54,13 +54,13 @@ export const emailSyncTool: AgentTool<any, any> = {
         details: { status: "processing", emailCount: emails.length }
       });
 
-      const jobModule = new JobModule();
+      const dispatcher = new Dispatcher();
       let processed = 0;
       let saved = 0;
 
       for (const email of emails) {
         try {
-          await jobModule.handle(email);
+          await dispatcher.dispatch(email);
           saved++;
         } catch (e) {
           console.error(`Error processing email: ${e}`);
