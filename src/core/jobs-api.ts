@@ -2,6 +2,13 @@ import { db } from "../db";
 import { jobs } from "../db/schema";
 import { desc, eq, like, and, or, sql } from "drizzle-orm";
 
+const VALID_STATUSES = ["inbox", "applied", "interviewing", "offer", "rejected", "skipped"] as const;
+const MAX_LIMIT = 100;
+
+function escapeSearchPattern(search: string): string {
+  return search.replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
 export async function getJobs(params: {
   status?: string;
   starred?: boolean;
@@ -9,11 +16,16 @@ export async function getJobs(params: {
   offset?: number;
   search?: string;
 }) {
-  const { status, starred, limit = 20, offset = 0, search } = params;
+  const { status, starred, search } = params;
+  const safeLimit = Math.min(Math.max(params.limit ?? 20, 1), MAX_LIMIT);
+  const safeOffset = Math.max(params.offset ?? 0, 0);
   
   let conditions = [];
   
   if (status && status !== "all") {
+    if (!VALID_STATUSES.includes(status as typeof VALID_STATUSES[number])) {
+      throw new Error(`Invalid status: ${status}. Valid values: ${VALID_STATUSES.join(", ")}`);
+    }
     conditions.push(eq(jobs.status, status));
   }
   
@@ -22,11 +34,12 @@ export async function getJobs(params: {
   }
   
   if (search) {
+    const escapedSearch = escapeSearchPattern(search);
     conditions.push(
       or(
-        like(jobs.title, `%${search}%`),
-        like(jobs.company, `%${search}%`),
-        like(jobs.snippet, `%${search}%`)
+        like(jobs.title, `%${escapedSearch}%`),
+        like(jobs.company, `%${escapedSearch}%`),
+        like(jobs.snippet, `%${escapedSearch}%`)
       )
     );
   }
@@ -37,8 +50,8 @@ export async function getJobs(params: {
   const result = await queryBase
     .where(whereClause)
     .orderBy(desc(jobs.receivedAt))
-    .limit(limit)
-    .offset(offset);
+    .limit(safeLimit)
+    .offset(safeOffset);
     
   const countResult = await db.select({ count: sql<number>`count(*)` })
     .from(jobs)
@@ -81,7 +94,11 @@ export async function updateJob(id: number, data: Partial<{
   starred: boolean;
   score: number;
 }>) {
-  const updateData: any = {};
+  if (data.status && !VALID_STATUSES.includes(data.status as typeof VALID_STATUSES[number])) {
+    throw new Error(`Invalid status: ${data.status}. Valid values: ${VALID_STATUSES.join(", ")}`);
+  }
+  
+  const updateData: Record<string, unknown> = {};
   if (data.status) updateData.status = data.status;
   if (data.starred !== undefined) updateData.starred = data.starred ? 1 : 0;
   if (data.score !== undefined) updateData.score = data.score;

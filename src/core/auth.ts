@@ -40,9 +40,9 @@ export const authMiddleware = async (c: Context, next: Next) => {
   await next();
 };
 
-export async function generateInitialToken(): Promise<string> {
+export async function generateInitialToken(): Promise<{ token?: string; created: boolean }> {
   const existing = await db.select().from(authTokens).limit(1);
-  if (existing.length > 0) return "Token already exists";
+  if (existing.length > 0) return { created: false };
   
   const token = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("hex");
   const tokenHash = await hashToken(token);
@@ -52,5 +52,5 @@ export async function generateInitialToken(): Promise<string> {
     tokenHash: tokenHash,
   });
   
-  return token;
+  return { token, created: true };
 }

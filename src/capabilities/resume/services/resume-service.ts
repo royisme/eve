@@ -1,7 +1,9 @@
 import { db } from "../../../db";
 import { resumes, tailoredResumes } from "../../../db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { pdfService } from "../../../services/pdf";
+
+const MAX_RESUME_SIZE = 5 * 1024 * 1024; // 5MB limit
 
 export async function listResumes() {
   return db.select().from(resumes).orderBy(desc(resumes.updatedAt));
@@ -14,11 +16,15 @@ export async function getResume(id: number) {
 
 export async function importResume(params: {
   name: string;
-  content: string; // Markdown or Base64 PDF
+  content: string;
   format: 'markdown' | 'pdf';
   source?: string;
   filename?: string;
 }) {
+  if (params.content.length > MAX_RESUME_SIZE) {
+    throw new Error(`Resume content too large (max ${MAX_RESUME_SIZE / 1024 / 1024}MB)`);
+  }
+  
   let markdownContent = params.content;
   let status: 'success' | 'partial' | 'failed' = 'success';
   let errors: string[] = [];
@@ -55,17 +61,21 @@ export async function updateResume(id: number, data: Partial<{
   content: string;
   isDefault: boolean;
 }>) {
-  const updateData: any = { ...data, updatedAt: new Date().toISOString() };
+  const updateData: Record<string, unknown> = { ...data, updatedAt: new Date().toISOString() };
   
   if (data.isDefault) {
-    // Reset other defaults
-    await db.update(resumes).set({ isDefault: 0 });
-    updateData.isDefault = 1;
-  } else if (data.isDefault === false) {
-    updateData.isDefault = 0;
+    db.transaction((tx) => {
+      tx.update(resumes).set({ isDefault: 0 }).run();
+      updateData.isDefault = 1;
+      tx.update(resumes).set(updateData).where(eq(resumes.id, id)).run();
+    });
+  } else {
+    if (data.isDefault === false) {
+      updateData.isDefault = 0;
+    }
+    await db.update(resumes).set(updateData).where(eq(resumes.id, id));
   }
 
-  await db.update(resumes).set(updateData).where(eq(resumes.id, id));
   return getResume(id);
 }
 
