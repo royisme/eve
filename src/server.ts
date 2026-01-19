@@ -1,4 +1,11 @@
+import { Hono } from "hono";
+import type { Context } from "hono";
+import { cors } from "hono/cors";
+import { AgentManager } from "./agents/manager";
+import { getCapabilities } from "./capabilities";
 import { Dispatcher } from "./core/dispatcher";
+
+const DEFAULT_PORT = 3033;
 
 type IngestPayload = {
   url: string;
@@ -6,75 +13,97 @@ type IngestPayload = {
   timestamp: string;
 };
 
-type GeneratePayload = {
-  prompt: string;
-  contextId?: string;
-};
+export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
+  const app = new Hono();
+  const agentManager = new AgentManager();
+  const dispatcher = new Dispatcher();
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-};
+  await agentManager.init();
 
-const dispatcher = new Dispatcher();
+  app.use("/*", cors());
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...CORS_HEADERS,
-      "Content-Type": "application/json",
-    },
+  app.get("/health", (c: Context) => {
+    const agent = agentManager.getAgent();
+    return c.json({
+      status: "ok",
+      version: "0.3.0",
+      agent: {
+        tools: agent.state.tools.map(t => t.name),
+      }
+    });
+  });
+
+  app.get("/agent/status", (c: Context) => {
+    return c.json({
+      core: "Eve Agent v0.3",
+      capabilities: getCapabilities().map(cap => ({
+        name: cap.name,
+        description: cap.description,
+        tools: cap.tools.map(t => t.name)
+      })),
+    });
+  });
+
+  app.post("/chat", async (c: Context) => {
+    const { prompt, agentName } = await c.req.json();
+    const response = await agentManager.prompt(agentName, prompt);
+    return c.json({ response });
+  });
+
+  app.post("/ingest", async (c: Context) => {
+    const payload = await c.req.json() as IngestPayload;
+    console.log(`[server] ingest url=${payload.url}`);
+
+    const email = {
+      id: `ext-${Date.now()}`,
+      threadId: `thread-ext-${Date.now()}`,
+      from: "chrome-extension",
+      subject: `Page Ingest: ${payload.url}`,
+      snippet: "Ingested via chrome extension",
+      body: payload.content,
+      date: new Date(payload.timestamp),
+    };
+
+    if (payload.url.includes("indeed.com")) {
+      email.from = "alerts@indeed.com";
+      email.subject = "Indeed Job Alert";
+    } else if (payload.url.includes("linkedin.com")) {
+      email.from = "jobs-listings@linkedin.com";
+      email.subject = "LinkedIn Job Alert";
+    }
+
+    await dispatcher.dispatch(email);
+    return c.json({ status: "ok" });
+  });
+
+  app.post("/ui", async (c: Context) => {
+    return c.json({
+      components: [
+        { type: "Button", label: "Analyze Job", action: "analyze" }
+      ]
+    });
+  });
+
+  app.post("/generate-resume", async (c: Context) => {
+    const body = await c.req.json();
+    return c.json({
+      status: "success",
+      pdfUrl: `http://localhost:${port}/download/resume.pdf`,
+      markdown: body.markdown + "\n\n(Tailored by Eve)"
+    });
+  });
+
+  console.log(`🔌 Eve HTTP API listening on http://localhost:${port}`);
+  console.log(`   Endpoints: /health, /agent/status, /chat, /ingest`);
+  console.log(`   For direct interaction, use: eve (TUI) or eve <command> (CLI)`);
+
+  Bun.serve({
+    port,
+    fetch: app.fetch,
   });
 }
 
-export function startServer(port = 3033): void {
-  const server = Bun.serve({
-    port,
-    fetch: async (request) => {
-      if (request.method === "OPTIONS") {
-        return new Response(null, { status: 204, headers: CORS_HEADERS });
-      }
-
-      const url = new URL(request.url);
-      if (request.method === "POST" && url.pathname === "/ingest") {
-        const payload = (await request.json()) as IngestPayload;
-        console.log(`[server] ingest url=${payload.url}`);
-
-        // Construct pseudo-email for Dispatcher
-        const email = {
-          id: `ext-${Date.now()}`,
-          threadId: `thread-ext-${Date.now()}`,
-          from: "chrome-extension", // Trigger logic might need "indeed.com" in sender to route to IndeedAdapter
-          subject: `Page Ingest: ${payload.url}`, // Might need "job" keyword
-          snippet: "Ingested via chrome extension",
-          body: payload.content,
-          date: new Date(payload.timestamp),
-        };
-
-        // Hack: If URL is indeed, force sender to indeed to trigger Adapter
-        if (payload.url.includes("indeed.com")) {
-          email.from = "alerts@indeed.com";
-          email.subject = "Indeed Job Alert";
-        } else if (payload.url.includes("linkedin.com")) {
-          email.from = "jobs-listings@linkedin.com";
-          email.subject = "LinkedIn Job Alert";
-        }
-
-        await dispatcher.dispatch(email);
-
-        return jsonResponse({ status: "ok" });
-      }
-
-      if (request.method === "POST" && url.pathname === "/generate") {
-        const payload = (await request.json()) as GeneratePayload;
-        return jsonResponse({ text: `Echo: ${payload.prompt}` });
-      }
-
-      return jsonResponse({ error: "Not found" }, 404);
-    },
-  });
-
-  console.log(`🚀 Eve server listening on http://localhost:${server.port}`);
+if (import.meta.main) {
+  const port = parseInt(process.env.PORT || String(DEFAULT_PORT), 10);
+  await startServer(port);
 }
