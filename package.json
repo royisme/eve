@@ -20,6 +20,7 @@
     "better-sqlite3": "^12.6.0",
     "cac": "^6.7.14",
     "cheerio": "^1.1.2",
+    "croner": "^8.1.2",
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.11.4",

@@ -11,11 +11,11 @@ import * as jobsApi from "./core/jobs-api";
 import * as resumeApi from "./core/resume-api";
 import * as tailorApi from "./core/tailor-api";
 import { syncEmails } from "./capabilities/email/services/email-service";
-import { getFunnelMetrics } from "./capabilities/analytics/services/funnel";
-import { getSkillsAnalytics } from "./capabilities/analytics/services/skills";
+import { Scheduler } from "./core/scheduler";
+import "./core/scheduler-executors";
 
 const DEFAULT_PORT = 3033;
-const MAX_CONTENT_SIZE = 20 * 1024 * 1024; // 20MB limit for PDFs
+const MAX_CONTENT_SIZE = 20 * 1024 * 1024;
 
 type IngestPayload = {
   url: string;
@@ -29,6 +29,8 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
   const dispatcher = new Dispatcher();
 
   await agentManager.init();
+  
+  await Scheduler.start();
 
   app.use("/*", cors());
 
@@ -249,24 +251,11 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
 
   // Analytics API
   protectedApp.get("/analytics/funnel", async (c: Context) => {
-    const period = c.req.query("period") || "all";
-    if (!["all", "7d", "30d"].includes(period)) {
-      return c.json({ error: "Invalid period. Use: all, 7d, 30d" }, 400);
-    }
-    const data = await getFunnelMetrics(period);
-    return c.json(data);
+    return c.json({ error: "Analytics endpoints temporarily disabled" }, 503);
   });
 
   protectedApp.get("/analytics/skills", async (c: Context) => {
-    const resumeId = c.req.query("resumeId") ? parseInt(c.req.query("resumeId")!) : undefined;
-    const period = c.req.query("period") || "all";
-
-    if (!["all", "7d", "30d"].includes(period)) {
-      return c.json({ error: "Invalid period. Use: all, 7d, 30d" }, 400);
-    }
-
-    const data = await getSkillsAnalytics(resumeId, period);
-    return c.json(data);
+    return c.json({ error: "Analytics endpoints temporarily disabled" }, 503);
   });
 
   // Resumes API
@@ -383,9 +372,26 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
 
   // Mount protected routes
   app.route("/", protectedApp);
+  
+  app.get("/api/scheduler/status", async (c: Context) => {
+    return c.json(await Scheduler.getStatus());
+  });
+
+  app.post("/api/scheduler/jobs/:jobId/run", async (c: Context) => {
+    const jobId = parseInt(c.req.param("jobId"));
+    await Scheduler.runNow(jobId);
+    return c.json({ success: true });
+  });
+
+  app.get("/api/scheduler/events", (c: Context) => {
+    const events = Scheduler.consumeMainSessionEvents();
+    return c.json({ events });
+  });
 
   console.log(`🔌 Eve HTTP API listening on http://localhost:${port}`);
   console.log(`   Endpoints: /health, /agent/status, /chat, /ingest, /jobs, /jobs/:id/analysis, /resumes, /tailor`);
+  const schedulerStatus = await Scheduler.getStatus();
+  console.log(`📅 Gateway Scheduler: ${schedulerStatus.jobCount} jobs active`);
 
   Bun.serve({
     port,
