@@ -26,10 +26,12 @@
 | 2026-01-19 | `a54329b` | Extract email sync logic to service layer |
 | 2026-01-19 | `fa6b556` | **Job analysis caching** + URL deduplication |
 | 2026-01-19 | `b71a6cd` | Fix circular dependency in capabilities init |
+| 2026-01-19 | `e0ccf74` | **TUI TypeScript fix** (pi-tui v0.49.2, delete bad .d.ts) |
+| 2026-01-19 | `7038238` | **Milkdown Integration** (Wall-E): WYSIWYG editor + Toolbar + Theme |
 
 ### 🔄 In Progress
 
-- Wall-E integration with new APIs
+- Wall-E Resume tab UI implementation
 - End-to-end testing
 
 ### ⬜ Not Started
@@ -1150,14 +1152,14 @@ export default eveApi;
 
 | Task | Description | Effort | Status |
 |------|-------------|--------|--------|
-| Milkdown integration | Replace Textarea with Milkdown WYSIWYG editor | 6h | ⬜ Pending |
-| Theme customization | Apply Eve (Nord/Clean) theme to editor | 3h | ⬜ Pending |
-| Toolbar plugins | Add slash commands and formatting toolbar | 4h | ⬜ Pending |
-| Split-view sync | Sync scroll between preview and editor | 3h | ⬜ Pending |
+| Milkdown integration | Replace Textarea with Milkdown WYSIWYG editor | 6h | ✅ Done |
+| Theme customization | Apply Eve (Nord/Clean) theme to editor | 3h | ✅ Done |
+| Toolbar plugins | Add slash commands and formatting toolbar | 4h | ✅ Done |
+| Split-view sync | Sync scroll between preview and editor | 3h | ⬜ Skipped |
 
 **Deliverable**: Premium editing experience for resumes
 
-**Effort**: ~16h
+**Effort**: ~13h
 
 ### Phase 4: PDF & Analytics (P2) - Week 5-6
 
