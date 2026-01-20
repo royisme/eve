@@ -35,12 +35,10 @@
     "start": "bun run src/index.ts",
     "build": "mkdir -p release && bun build ./src/index.ts --compile --outfile release/eve",
     "check": "oxlint . && tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "prepare": "husky"
   },
   "lint-staged": {
-    "*.ts": [
-      "oxlint",
-      "tsc --noEmit"
-    ]
+    "*.ts": "oxlint"
   }
 }
