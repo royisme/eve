@@ -373,8 +373,8 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
   // Mount protected routes
   app.route("/", protectedApp);
   
-  app.get("/api/scheduler/status", (c: Context) => {
-    return c.json(Scheduler.getStatus());
+  app.get("/api/scheduler/status", async (c: Context) => {
+    return c.json(await Scheduler.getStatus());
   });
 
   app.post("/api/scheduler/jobs/:jobId/run", async (c: Context) => {
@@ -390,7 +390,8 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
 
   console.log(`🔌 Eve HTTP API listening on http://localhost:${port}`);
   console.log(`   Endpoints: /health, /agent/status, /chat, /ingest, /jobs, /jobs/:id/analysis, /resumes, /tailor`);
-  console.log(`📅 Gateway Scheduler: ${Scheduler.getStatus().jobCount} jobs active`);
+  const schedulerStatus = await Scheduler.getStatus();
+  console.log(`📅 Gateway Scheduler: ${schedulerStatus.jobCount} jobs active`);
 
   Bun.serve({
     port,

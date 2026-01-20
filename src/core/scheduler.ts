@@ -204,16 +204,16 @@ class GatewayScheduler {
     }
   }
 
-  getStatus(): {
+  async getStatus(): Promise<{
     running: boolean;
     jobCount: number;
     jobs: { id: number; name: string; nextRun: Date | null; lastRun: string | null }[];
     pendingMainEvents: number;
-  } {
+  }> {
     const jobList: { id: number; name: string; nextRun: Date | null; lastRun: string | null }[] = [];
     
     for (const [id, scheduled] of this.jobs) {
-      const job = db.select().from(cronJobs).where(eq(cronJobs.id, id)).get();
+      const job = await db.select().from(cronJobs).where(eq(cronJobs.id, id)).get();
       jobList.push({
         id,
         name: job?.name || 'Unknown',

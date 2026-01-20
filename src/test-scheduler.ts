@@ -25,7 +25,7 @@ await Scheduler.start();
 console.log('✅ Scheduler started\n');
 
 console.log('Step 3: Getting scheduler status...');
-const status = Scheduler.getStatus();
+const status = await Scheduler.getStatus();
 console.log(`📊 Status:`);
 console.log(`   Running: ${status.running}`);
 console.log(`   Active Jobs: ${status.jobCount}`);
