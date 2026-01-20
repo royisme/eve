@@ -1077,7 +1077,7 @@ export default eveApi;
 | Auth handshake | Shared secret token between Wall-E and Eve | 2h | ✅ Done |
 | Jobs HTTP API | Add `/jobs` endpoints to Eve server | 6h | ✅ Done |
 | Job stats endpoint | `GET /jobs/stats` for header | 1h | ✅ Done |
-| Wall-E JobsList real data | Replace mock data with API calls | 3h | ⬜ Pending |
+| Wall-E JobsList real data | Replace mock data with API calls | 3h | ✅ Done |
 | Job sync with SSE | `POST /jobs/sync` with progress events | 3h | ✅ Done |
 | Basic job filtering | Status filter with real data | 2h | ✅ Done |
 | Job deduplication | URL hash-based dedup on sync | 2h | ⬜ Pending |
@@ -1096,27 +1096,40 @@ export default eveApi;
 | Resume import (MD) | Markdown paste/upload | 2h | ✅ Done |
 | Resume import (PDF) | PDF parsing with pdftotext | 4h | ✅ Done |
 | Parse status handling | Status polling, error display | 3h | ✅ Done |
-| Wall-E Resume tab | Resume library UI | 4h | ⬜ Pending |
+| Wall-E Resume tab | Resume library UI | 4h | ✅ Done |
 
 **Deliverable**: Users can import and manage resumes with error handling
 
 **Effort**: ~25h (with 30% buffer: ~33h)
 
-### Phase 2: Job Analysis (P1) - Week 3-4
+### Phase 2: Job Analysis (P1) - Week 3-4 ✅ COMPLETE
 
 | Task | Description | Effort | Status |
 |------|-------------|--------|--------|
-| Analysis cache schema | Create `job_analysis` table | 1h | |
-| Analysis caching | Cache by job_id + resume_id + prompt_hash | 3h | |
-| Job detail drawer | Full info with inline resume selector | 5h | |
-| Match analysis display | Show score, skills, gaps | 4h | |
-| Keyword pre-score | Lightweight matching without LLM | 3h | |
-| Quick triage actions | Skip/Star/Analyze in list | 2h | |
-| Job status updates | Dropdown with status history | 3h | |
+| Analysis cache schema | Create `job_analysis` table | 1h | ✅ Done |
+| Analysis caching | Cache by job_id + resume_id + prompt_hash | 3h | ✅ Done |
+| Job detail drawer | Full info with inline resume selector | 5h | ✅ Done |
+| Match analysis display | Show score, skills, gaps | 4h | ✅ Done |
+| Keyword pre-score | Lightweight matching without LLM | 3h | ✅ Done |
+| Quick triage actions | Skip/Star/Analyze in list | 2h | ✅ Done |
+| Job status updates | Dropdown with status history | 3h | ✅ Done |
 
 **Deliverable**: Users can see match analysis with caching
 
 **Effort**: ~21h (with 30% buffer: ~28h)
+
+### Phase 2.5: Wall-E Basic Integration ✅ COMPLETE (Added)
+
+| Task | Description | Effort | Status |
+|------|-------------|--------|--------|
+| JobsList real data | Replace mock data with API integration | 2h | ✅ Done |
+| Resume tab UI | Implement resume library with API | 3h | ✅ Done |
+| Job detail drawer | Create drawer component with analysis | 4h | ✅ Done |
+| Quick triage buttons | Skip/Star/Analyze actions | 2h | ✅ Done |
+
+**Deliverable**: Wall-E fully integrated with Eve backend APIs
+
+**Effort**: ~11h
 
 ### Phase 3: Workspace Enhancement (P1) - Week 4-5
 
