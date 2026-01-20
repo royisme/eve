@@ -11,6 +11,7 @@ import * as jobsApi from "./core/jobs-api";
 import * as resumeApi from "./core/resume-api";
 import * as tailorApi from "./core/tailor-api";
 import { syncEmails } from "./capabilities/email/services/email-service";
+import { getFunnelMetrics } from "./capabilities/analytics/services/funnel";
 
 const DEFAULT_PORT = 3033;
 const MAX_CONTENT_SIZE = 20 * 1024 * 1024; // 20MB limit for PDFs
@@ -218,6 +219,16 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
     const resumeId = Number(resumeIdRaw);
     if (!Number.isFinite(resumeId)) return c.json({ error: "Invalid resumeId" }, 400);
     return c.json(await jobsApi.getPreScore(id, resumeId));
+  });
+
+  // Analytics API
+  protectedApp.get("/analytics/funnel", async (c: Context) => {
+    const period = c.req.query("period") || "all";
+    if (!["all", "7d", "30d"].includes(period)) {
+      return c.json({ error: "Invalid period. Use: all, 7d, 30d" }, 400);
+    }
+    const data = await getFunnelMetrics(period);
+    return c.json(data);
   });
 
   // Resumes API
