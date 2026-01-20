@@ -1,10 +1,11 @@
-import { Container, Text, Input, TUI, Box } from "@mariozechner/pi-tui";
+import { Container, Text, Input, TUI, Box, type Component } from "@mariozechner/pi-tui";
 import { getEveCore, isInitialized } from "../../core/bootstrap";
 
 export class ChatTab extends Container {
+  private tui: TUI;
   private history: Text;
   private input: Input;
-  private tui: TUI;
+  private inputBox: Box;
   private isProcessing = false;
   private _historyText = "";
 
@@ -16,23 +17,23 @@ export class ChatTab extends Container {
     this.addChild(this.history);
     this.appendMessage("eve", "Hello! I'm Eve. How can I help you?");
 
-    const inputBox = new Box(0, 0);
+    this.inputBox = new Box(0, 0);
     this.input = new Input();
-    this.input.onSubmit = (val) => this.handleSubmit(val);
-    inputBox.addChild(this.input);
-    
-    this.addChild(inputBox);
+    this.input.onSubmit = (val: string) => this.handleSubmit(val);
+    this.inputBox.addChild(this.input);
+
+    this.addChild(this.inputBox);
   }
 
   appendMessage(role: "user" | "eve", text: string) {
-    const color = role === "user" ? "\x1b[32m" : "\x1b[36m"; 
+    const color = role === "user" ? "\x1b[32m" : "\x1b[36m";
     const reset = "\x1b[0m";
     const prefix = role === "user" ? "You" : "Eve";
     const formatted = `\n${color}${prefix}:${reset} ${text}`;
-    
+
     this._historyText += formatted;
     this.history.setText(this._historyText);
-    
+
     this.tui.requestRender();
   }
 
@@ -40,36 +41,35 @@ export class ChatTab extends Container {
     if (!text.trim() || this.isProcessing) return;
 
     this.appendMessage("user", text);
-    this.input.setValue(""); 
+    this.input.setValue("");
     this.isProcessing = true;
     this.tui.requestRender();
 
     try {
-        if (!isInitialized()) {
-            this.appendMessage("eve", "⚠️ Eve is not initialized yet.");
-            this.isProcessing = false;
-            return;
+      if (!isInitialized()) {
+        this.appendMessage("eve", "⚠️ Eve is not initialized yet.");
+        this.isProcessing = false;
+        return;
+      }
+
+      const core = getEveCore();
+      let response = "";
+
+      const unsubscribe = core.agent.subscribe((event) => {
+        if (event.type === "message_update" && event.assistantMessageEvent?.type === "text_delta") {
+          response += event.assistantMessageEvent.delta;
         }
+      });
 
-        const core = getEveCore();
-        let response = "";
+      try {
+        await core.agent.prompt(text);
+      } finally {
+        unsubscribe();
+      }
 
-        const unsubscribe = core.agent.subscribe((event) => {
-             if (event.type === "message_update" && event.assistantMessageEvent?.type === "text_delta") {
-                 response += event.assistantMessageEvent.delta;
-             }
-        });
-
-        try {
-            await core.agent.prompt(text);
-        } finally {
-            unsubscribe();
-        }
-
-        this.appendMessage("eve", response || "I processed your request.");
-
+      this.appendMessage("eve", response || "I processed your request.");
     } catch (e) {
-        this.appendMessage("eve", `❌ Error: ${(e as Error).message}`);
+      this.appendMessage("eve", `❌ Error: ${(e as Error).message}`);
     }
 
     this.isProcessing = false;
@@ -77,7 +77,16 @@ export class ChatTab extends Container {
     this.tui.setFocus(this.input);
   }
 
+  handleInput(data: string) {
+    this.input.handleInput(data);
+  }
+
+  invalidate(): void {
+    this.history.invalidate();
+    this.inputBox.invalidate();
+  }
+
   focus() {
-      this.tui.setFocus(this.input);
+    this.tui.setFocus(this.input);
   }
 }
