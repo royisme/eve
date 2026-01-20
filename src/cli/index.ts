@@ -63,6 +63,57 @@ const jobModule = new JobModule();
 jobModule.registerCommands(cli);
 
 cli
+  .command("config", "Interactive scheduler configuration wizard")
+  .action(async () => {
+    const { bootstrap } = await import("../core/bootstrap");
+    await bootstrap();
+    
+    const { interactiveSchedulerSetup } = await import("./scheduler-config");
+    await interactiveSchedulerSetup();
+  });
+
+cli
+  .command("scheduler:start", "Start the Gateway scheduler daemon")
+  .action(async () => {
+    const { bootstrap } = await import("../core/bootstrap");
+    await bootstrap();
+    
+    const { Scheduler } = await import("../core/scheduler");
+    await import("../core/scheduler-executors");
+    
+    await Scheduler.start();
+    console.log("🕐 Gateway Scheduler running. Press Ctrl+C to stop.");
+    await new Promise(() => {});
+  });
+
+cli
+  .command("scheduler:status", "Show scheduler status")
+  .action(async () => {
+    const { bootstrap } = await import("../core/bootstrap");
+    await bootstrap();
+    
+    const { Scheduler } = await import("../core/scheduler");
+    await import("../core/scheduler-executors");
+    await Scheduler.start();
+    
+    const status = await Scheduler.getStatus();
+    console.log(JSON.stringify(status, null, 2));
+  });
+
+cli
+  .command("scheduler:run <jobId>", "Run a cron job immediately")
+  .action(async (jobId: string) => {
+    const { bootstrap } = await import("../core/bootstrap");
+    await bootstrap();
+    
+    const { Scheduler } = await import("../core/scheduler");
+    await import("../core/scheduler-executors");
+    
+    await Scheduler.runNow(parseInt(jobId));
+    console.log(`✅ Job ${jobId} triggered`);
+  });
+
+cli
   .command("serve", "Start HTTP API server")
   .option("--port <port>", "Port number", { default: 3033 })
   .action(async (options: { port: number }) => {
