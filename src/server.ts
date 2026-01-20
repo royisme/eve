@@ -12,6 +12,7 @@ import * as resumeApi from "./core/resume-api";
 import * as tailorApi from "./core/tailor-api";
 import { syncEmails } from "./capabilities/email/services/email-service";
 import { getFunnelMetrics } from "./capabilities/analytics/services/funnel";
+import { getSkillsAnalytics } from "./capabilities/analytics/services/skills";
 
 const DEFAULT_PORT = 3033;
 const MAX_CONTENT_SIZE = 20 * 1024 * 1024; // 20MB limit for PDFs
@@ -228,6 +229,18 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
       return c.json({ error: "Invalid period. Use: all, 7d, 30d" }, 400);
     }
     const data = await getFunnelMetrics(period);
+    return c.json(data);
+  });
+
+  protectedApp.get("/analytics/skills", async (c: Context) => {
+    const resumeId = c.req.query("resumeId") ? parseInt(c.req.query("resumeId")!) : undefined;
+    const period = c.req.query("period") || "all";
+
+    if (!["all", "7d", "30d"].includes(period)) {
+      return c.json({ error: "Invalid period. Use: all, 7d, 30d" }, 400);
+    }
+
+    const data = await getSkillsAnalytics(resumeId, period);
     return c.json(data);
   });
 

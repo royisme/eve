@@ -1,0 +1,82 @@
+export interface SkillDefinition {
+  canonical: string;
+  aliases: string[];
+  category: string;
+}
+
+export const SKILLS: SkillDefinition[] = [
+  // Languages
+  { canonical: "TypeScript", aliases: ["typescript", "ts"], category: "languages" },
+  { canonical: "JavaScript", aliases: ["javascript", "js", "ecmascript", "es6", "es2015"], category: "languages" },
+  { canonical: "Python", aliases: ["python", "py", "python3"], category: "languages" },
+  { canonical: "Java", aliases: ["java"], category: "languages" },
+  { canonical: "Go", aliases: ["go", "golang"], category: "languages" },
+  { canonical: "Rust", aliases: ["rust"], category: "languages" },
+  { canonical: "C++", aliases: ["c++", "cpp", "cplusplus"], category: "languages" },
+  { canonical: "C#", aliases: ["c#", "csharp", "c-sharp"], category: "languages" },
+  { canonical: "Ruby", aliases: ["ruby", "rb"], category: "languages" },
+  { canonical: "PHP", aliases: ["php"], category: "languages" },
+  { canonical: "Swift", aliases: ["swift"], category: "languages" },
+  { canonical: "Kotlin", aliases: ["kotlin"], category: "languages" },
+  { canonical: "Scala", aliases: ["scala"], category: "languages" },
+
+  // Frameworks
+  { canonical: "React", aliases: ["react", "react.js", "reactjs"], category: "frameworks" },
+  { canonical: "Vue", aliases: ["vue", "vue.js", "vuejs"], category: "frameworks" },
+  { canonical: "Angular", aliases: ["angular", "angularjs", "angular 2", "angular 4", "angular 5"], category: "frameworks" },
+  { canonical: "Next.js", aliases: ["next.js", "nextjs", "next"], category: "frameworks" },
+  { canonical: "Node.js", aliases: ["node.js", "nodejs", "node"], category: "frameworks" },
+  { canonical: "Express", aliases: ["express", "express.js", "expressjs"], category: "frameworks" },
+  { canonical: "NestJS", aliases: ["nestjs", "nest", "nest.js"], category: "frameworks" },
+  { canonical: "Django", aliases: ["django"], category: "frameworks" },
+  { canonical: "Flask", aliases: ["flask"], category: "frameworks" },
+  { canonical: "Spring", aliases: ["spring", "spring boot", "springboot", "spring framework"], category: "frameworks" },
+  { canonical: "FastAPI", aliases: ["fastapi", "fast api"], category: "frameworks" },
+  { canonical: "Rails", aliases: ["rails", "ruby on rails", "ror"], category: "frameworks" },
+  { canonical: "Svelte", aliases: ["svelte", "sveltekit"], category: "frameworks" },
+
+  // Databases
+  { canonical: "PostgreSQL", aliases: ["postgresql", "postgres", "psql"], category: "databases" },
+  { canonical: "MySQL", aliases: ["mysql", "mariadb"], category: "databases" },
+  { canonical: "MongoDB", aliases: ["mongodb", "mongo"], category: "databases" },
+  { canonical: "Redis", aliases: ["redis"], category: "databases" },
+  { canonical: "Elasticsearch", aliases: ["elasticsearch", "elastic"], category: "databases" },
+  { canonical: "DynamoDB", aliases: ["dynamodb", "dynamo"], category: "databases" },
+  { canonical: "SQLite", aliases: ["sqlite"], category: "databases" },
+  { canonical: "Oracle", aliases: ["oracle", "oracle db"], category: "databases" },
+  { canonical: "Cassandra", aliases: ["cassandra"], category: "databases" },
+  { canonical: "Firebase", aliases: ["firebase", "firestore"], category: "databases" },
+
+  // Cloud
+  { canonical: "AWS", aliases: ["aws", "amazon web services", "amazon aws"], category: "cloud" },
+  { canonical: "GCP", aliases: ["gcp", "google cloud", "google cloud platform", "gcp"], category: "cloud" },
+  { canonical: "Azure", aliases: ["azure", "microsoft azure", "azure cloud"], category: "cloud" },
+  { canonical: "Kubernetes", aliases: ["kubernetes", "k8s", "k8"], category: "cloud" },
+  { canonical: "Docker", aliases: ["docker", "containers", "containerization"], category: "cloud" },
+  { canonical: "Terraform", aliases: ["terraform", "tf"], category: "cloud" },
+  { canonical: "Serverless", aliases: ["serverless", "aws lambda", "lambda", "cloud functions"], category: "cloud" },
+  { canonical: "Vercel", aliases: ["vercel", "next.js hosting"], category: "cloud" },
+  { canonical: "Netlify", aliases: ["netlify"], category: "cloud" },
+
+  // Tools
+  { canonical: "Git", aliases: ["git", "github", "gitlab", "bitbucket", "version control"], category: "tools" },
+  { canonical: "CI/CD", aliases: ["ci/cd", "cicd", "ci", "cd", "github actions", "gitlab ci", "jenkins", "circleci"], category: "tools" },
+  { canonical: "Jira", aliases: ["jira", "atlassian", "issue tracking"], category: "tools" },
+  { canonical: "Figma", aliases: ["figma", "ui design", "design"], category: "tools" },
+  { canonical: "Webpack", aliases: ["webpack"], category: "tools" },
+  { canonical: "Vite", aliases: ["vite", "vite.js"], category: "tools" },
+  { canonical: "Bun", aliases: ["bun", "bun.js"], category: "tools" },
+  { canonical: "npm", aliases: ["npm", "yarn", "pnpm", "package manager"], category: "tools" },
+
+  // Concepts
+  { canonical: "Microservices", aliases: ["microservices", "microservice", "micro-services"], category: "concepts" },
+  { canonical: "REST API", aliases: ["rest", "rest api", "restful", "rest api", "http api"], category: "concepts" },
+  { canonical: "GraphQL", aliases: ["graphql", "gql", "apollo"], category: "concepts" },
+  { canonical: "Agile", aliases: ["agile", "scrum", "kanban", "sprint"], category: "concepts" },
+  { canonical: "TDD", aliases: ["tdd", "test-driven", "test driven", "test-driven development"], category: "concepts" },
+  { canonical: "CI/CD Pipeline", aliases: ["ci/cd pipeline", "pipeline", "deployment pipeline"], category: "concepts" },
+  { canonical: "OAuth", aliases: ["oauth", "oauth 2", "oauth2", "authentication"], category: "concepts" },
+  { canonical: "JWT", aliases: ["jwt", "json web token", "token auth"], category: "concepts" },
+  { canonical: "System Design", aliases: ["system design", "architecture", "scalability", "distributed systems"], category: "concepts" },
+  { canonical: "Machine Learning", aliases: ["machine learning", "ml", "deep learning", "ai", "neural networks"], category: "concepts" },
+];
