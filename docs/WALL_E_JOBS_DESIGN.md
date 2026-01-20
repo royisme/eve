@@ -1131,20 +1131,33 @@ export default eveApi;
 
 **Effort**: ~11h
 
-### Phase 3: Workspace Enhancement (P1) - Week 4-5
+### Phase 3: Workspace Enhancement (P1) - Week 4-5 ✅ COMPLETE
 
 | Task | Description | Effort | Status |
 |------|-------------|--------|--------|
-| Workspace refactor | Add resume selector, job context | 4h | |
-| Tailored resume schema | Versioning support | 2h | |
-| Gap analysis panel | Show skill gaps | 5h | |
-| AI suggestions | Inline edit suggestions | 8h | |
-| Version history | Save/switch versions | 3h | |
-| Save tailored version | Persist per job with version | 3h | |
+| Workspace refactor | Add resume selector, job context | 4h | ✅ Done |
+| Tailored resume schema | Versioning support | 2h | ✅ Done |
+| Gap analysis panel | Show skill gaps | 5h | ✅ Done |
+| AI suggestions | Inline edit suggestions | 8h | ✅ Done |
+| Version history | Save/switch versions | 3h | ✅ Done |
+| Save tailored version | Persist per job with version | 3h | ✅ Done |
 
 **Deliverable**: Full resume tailoring workflow with versions
 
 **Effort**: ~25h (with 30% buffer: ~33h)
+
+### Phase 3.5: Editor Experience Upgrade (P2) - Week 5
+
+| Task | Description | Effort | Status |
+|------|-------------|--------|--------|
+| Milkdown integration | Replace Textarea with Milkdown WYSIWYG editor | 6h | ⬜ Pending |
+| Theme customization | Apply Eve (Nord/Clean) theme to editor | 3h | ⬜ Pending |
+| Toolbar plugins | Add slash commands and formatting toolbar | 4h | ⬜ Pending |
+| Split-view sync | Sync scroll between preview and editor | 3h | ⬜ Pending |
+
+**Deliverable**: Premium editing experience for resumes
+
+**Effort**: ~16h
 
 ### Phase 4: PDF & Analytics (P2) - Week 5-6
 
