@@ -146,6 +146,31 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
     return c.json(await jobsApi.getJobs(params));
   });
 
+  protectedApp.post("/jobs", async (c: Context) => {
+    const body = await c.req.json();
+    if (!body.title || typeof body.title !== "string") {
+      return c.json({ error: "title is required" }, 400);
+    }
+    if (!body.company || typeof body.company !== "string") {
+      return c.json({ error: "company is required" }, 400);
+    }
+    if (!body.url || typeof body.url !== "string") {
+      return c.json({ error: "url is required" }, 400);
+    }
+    try {
+      const job = await jobsApi.createJob({
+        title: body.title,
+        company: body.company,
+        url: body.url,
+        location: body.location,
+        source: body.source || "manual",
+      });
+      return c.json({ job });
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, 400);
+    }
+  });
+
   protectedApp.get("/jobs/stats", async (c: Context) => {
     return c.json(await jobsApi.getJobStats());
   });
@@ -273,6 +298,44 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
   protectedApp.post("/resumes/:id/default", async (c: Context) => {
     const id = parseInt(c.req.param("id"));
     return c.json({ resume: await resumeApi.setDefaultResume(id) });
+  });
+
+  protectedApp.get("/resumes/:id/status", async (c: Context) => {
+    const id = parseInt(c.req.param("id"));
+    if (!Number.isFinite(id)) return c.json({ error: "Invalid resume id" }, 400);
+    try {
+      const status = await resumeApi.getResumeStatus(id);
+      return c.json(status);
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, 404);
+    }
+  });
+
+  protectedApp.get("/resumes/:id/versions", async (c: Context) => {
+    const id = parseInt(c.req.param("id"));
+    if (!Number.isFinite(id)) return c.json({ error: "Invalid resume id" }, 400);
+    const result = await resumeApi.getResumeVersions(id);
+    return c.json(result);
+  });
+
+  protectedApp.post("/resumes/tailored/:id/pdf", async (c: Context) => {
+    const id = Number(c.req.param("id"));
+    if (!Number.isFinite(id)) return c.json({ error: "Invalid tailored resume id" }, 400);
+    
+    try {
+      const formData = await c.req.formData();
+      const file = formData.get("file") as File | null;
+      
+      if (!file) {
+        return c.json({ error: "No file provided" }, 400);
+      }
+      
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const result = await resumeApi.uploadTailoredPdf(id, buffer, file.name);
+      return c.json(result);
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, 400);
+    }
   });
 
   // Tailor API

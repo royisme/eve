@@ -9,6 +9,45 @@ Eve is a modular, local-first **AI Personal Agent Platform** built on `@mariozec
 
 ---
 
+## Wall-E ↔ Eve Feature Parity Matrix
+
+### ✅ Fully Supported Features
+
+| Wall-E Feature | Eve Backend | API Endpoint | Notes |
+|----------------|-------------|--------------|-------|
+| **Jobs List** | ✅ | `GET /jobs` | Filter by status, starred, search |
+| **Job Stats** | ✅ | `GET /jobs/stats` | Inbox/Applied/Interview/Offer counts |
+| **Job Detail** | ✅ | `GET /jobs/:id` | With optional analysis |
+| **Job Star** | ✅ | `POST /jobs/:id/star` | Toggle starred status |
+| **Job Status Update** | ✅ | `PATCH /jobs/:id` | Status transitions |
+| **Job Sync (SSE)** | ✅ | `GET /jobs/sync` | Real-time email sync progress |
+| **Job Analysis** | ✅ | `POST /jobs/:id/analyze` | LLM-powered fit scoring |
+| **Job Prescore** | ✅ | `GET /jobs/:id/prescore` | Quick keyword matching |
+| **Resume List** | ✅ | `GET /resumes` | All resumes with metadata |
+| **Resume CRUD** | ✅ | `POST/GET/PUT/DELETE /resumes/:id` | Full lifecycle |
+| **Resume Default** | ✅ | `POST /resumes/:id/default` | Set default resume |
+| **Resume Tailor** | ✅ | `POST /tailor/:jobId` | LLM resume customization |
+| **Tailored Versions** | ✅ | `GET /tailor/:jobId` | Version history |
+| **Tailored Update** | ✅ | `PUT /tailor/:id` | Edit tailored content |
+| **Analytics Funnel** | ✅ | `GET /analytics/funnel` | Conversion metrics |
+| **Analytics Skills** | ✅ | `GET /analytics/skills` | Top skills + gaps |
+| **Manual Job Create** | ✅ | `POST /jobs` | Create jobs manually |
+| **PDF Upload** | ✅ | `POST /resumes/tailored/:id/pdf` | Upload generated PDFs |
+| **Resume Status** | ✅ | `GET /resumes/:id/status` | Parse status polling |
+| **Resume Versions** | ✅ | `GET /resumes/:id/versions` | Tailored version history |
+| **Chat** | ✅ | `POST /chat` | Agent conversation |
+| **Health Check** | ✅ | `GET /health` | Server status |
+| **Agent Status** | ✅ | `GET /agent/status` | Capabilities list |
+
+### ⚠️ Partial / Missing Features
+
+| Wall-E Feature | Eve Backend | Gap Description | Priority |
+|----------------|-------------|-----------------|----------|
+| **Chat Streaming** | 🔄 Partial | Uses simple POST, not SSE streaming | P3 |
+| **Safari Support** | ❌ Deferred | See RFC_SAFARI_COMPATIBILITY.md | - |
+
+---
+
 ## Implementation Status
 
 ### Core Framework
@@ -25,9 +64,9 @@ Eve is a modular, local-first **AI Personal Agent Platform** built on `@mariozec
 
 | Capability | Tools | Status |
 |------------|-------|--------|
-| **Jobs** | search, list, enrich, analyze, analyze_single, prescore, tailor, get_tailored_versions | ✅ 8 tools |
+| **Jobs** | search, list, enrich, analyze, tailor | ✅ 5 tools |
 | **Resume** | list, import, get, update, delete, set_default | ✅ 6 tools |
-| **Email** | status, setup, sync | ✅ 3 tools |
+| **Email** | status, sync | ✅ 2 tools |
 | **Analytics** | (services only, not as capability) | 🔄 Partial |
 
 ### HTTP API Endpoints
@@ -36,9 +75,9 @@ Eve is a modular, local-first **AI Personal Agent Platform** built on `@mariozec
 |----------|-----------|--------|
 | Health | `GET /health` | ✅ |
 | Agent | `GET /agent/status`, `POST /chat` | ✅ |
-| Jobs | Full CRUD + analyze, prescore, sync (SSE) | ✅ |
-| Resumes | Full CRUD + set default | ✅ |
-| Tailor | Create, list versions, update | ✅ |
+| Jobs | CRUD + analyze, prescore, sync (SSE) | ✅ Complete |
+| Resumes | Full CRUD + set default, status, versions | ✅ Complete |
+| Tailor | Create, list versions, update, PDF upload | ✅ Complete |
 | Analytics | `GET /analytics/funnel`, `GET /analytics/skills` | ✅ |
 
 ### Database Schema
@@ -62,21 +101,19 @@ Eve is a modular, local-first **AI Personal Agent Platform** built on `@mariozec
 | Job Detail Drawer | ✅ Complete | Full job info display |
 | Resume Library | ✅ Complete | CRUD operations |
 | Milkdown Editor | ✅ Complete | Markdown editing |
-| PDF Builder | 🔄 Partial | UI exists, backend PDF gen pending |
+| PDF Builder | 🔄 Partial | UI exists, generates HTML (not PDF) |
 | Analytics Modal | ✅ Complete | Funnel + Skills visualization |
 | Gap Analysis Panel | ✅ Complete | Skill gap display |
-| Chat Interface | ✅ Complete | With streaming support |
+| Chat Interface | ✅ Complete | Non-streaming |
 
 ---
 
-## Known Gaps
+## Technical Debt
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| PDF Generation Backend | P1 | Playwright/Puppeteer integration needed |
-| Analytics as Capability | P2 | Currently services only, not AgentTools |
-| Auto-Apply (UAP) | P3 | Future feature, not started |
-| ATS Detection | P3 | Future feature, not started |
+| Chat streaming | P3 | SSE for real-time tool calls |
+| Safari compatibility | Deferred | See RFC_SAFARI_COMPATIBILITY.md |
 
 ---
 
@@ -96,10 +133,10 @@ src/
 ├── capabilities/
 │   ├── types.ts          # Capability interface
 │   ├── index.ts          # Capability registry
-│   ├── jobs/             # 8 AgentTools
+│   ├── jobs/             # 5 AgentTools
 │   ├── resume/           # 6 AgentTools
-│   ├── email/            # 3 AgentTools
-│   └── analytics/        # Services (funnel, skills)
+│   ├── email/            # 2 AgentTools
+│   └── analytics/        # Services (funnel, skills, data)
 ├── db/
 │   └── schema.ts         # Drizzle schema
 └── services/
@@ -115,3 +152,4 @@ src/
 - `TECH_SPEC.md` - Technical architecture
 - `UI_SKILLS.md` - Frontend development constraints
 - `AGENTS.md` - AI agent development guide
+- `RFC_SAFARI_COMPATIBILITY.md` - Safari browser support proposal

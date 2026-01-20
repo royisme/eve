@@ -153,3 +153,32 @@ export async function getPreScore(
   const score = await getKeywordPreScore(jobId, resumeId);
   return { score };
 }
+
+export async function createJob(data: {
+  title: string;
+  company: string;
+  url: string;
+  location?: string;
+  source?: string;
+}) {
+  const now = new Date().toISOString();
+  const urlHash = data.url ? Buffer.from(data.url).toString('base64').slice(0, 32) : null;
+  
+  const result = await db.insert(jobs).values({
+    account: 'manual',
+    sender: 'manual',
+    subject: `${data.title} at ${data.company}`,
+    snippet: data.location || '',
+    receivedAt: now,
+    company: data.company,
+    title: data.title,
+    url: data.url,
+    urlHash,
+    status: 'inbox',
+    firstSeenAt: now,
+    lastSeenAt: now,
+    createdAt: now,
+  }).returning();
+  
+  return result[0];
+}
