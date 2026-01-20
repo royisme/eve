@@ -1,7 +1,6 @@
 import { db } from "../../../db";
 import { resumes, tailoredResumes } from "../../../db/schema";
 import { eq, desc } from "drizzle-orm";
-import { pdfService } from "../../../services/pdf";
 
 const MAX_RESUME_SIZE = 5 * 1024 * 1024; // 5MB limit
 
@@ -32,7 +31,10 @@ export async function importResume(params: {
   if (params.format === 'pdf') {
     try {
       const buffer = Buffer.from(params.content, 'base64');
-      markdownContent = await pdfService.extractText(buffer);
+      const proc = Bun.spawn(["pdftotext", "-", "-"], { stdout: "pipe", stdin: "pipe" });
+      proc.stdin.write(buffer);
+      await proc.stdin.end();
+      markdownContent = await new Response(proc.stdout).text();
       if (!markdownContent.trim()) {
         status = 'partial';
         errors.push("Extracted text is empty. PDF might be a scanned image.");
