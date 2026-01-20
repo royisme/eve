@@ -9,6 +9,7 @@ eva.db-journal
 drizzle
 *.db
 *.sqlite3
+eva
 
 .crush
 .cursor

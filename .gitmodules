@@ -1,0 +1,3 @@
+[submodule "extension/wall-e"]
+	path = extension/wall-e
+	url = https://github.com/royisme/eve-wall-e
