@@ -154,55 +154,69 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
   });
 
   protectedApp.post("/jobs/:id/star", async (c: Context) => {
-    const id = parseInt(c.req.param("id"));
+    const id = Number(c.req.param("id"));
+    if (!Number.isFinite(id)) return c.json({ error: "Invalid job id" }, 400);
     const { starred } = await c.req.json();
     return c.json({ job: await jobsApi.updateJob(id, { starred }) });
   });
 
   protectedApp.get("/jobs/:id", async (c: Context) => {
-    const id = parseInt(c.req.param("id"));
+    const id = Number(c.req.param("id"));
+    if (!Number.isFinite(id)) return c.json({ error: "Invalid job id" }, 400);
     const job = await jobsApi.getJobById(id);
     if (!job) {
       return c.json({ error: "Job not found" }, 404);
     }
-    const resumeId = c.req.query("resumeId");
+    const resumeIdRaw = c.req.query("resumeId");
     let analysis = null;
-    if (resumeId) {
-      const result = await jobsApi.getJobAnalysis(id, parseInt(resumeId));
+    let cached = false;
+    if (resumeIdRaw) {
+      const resumeId = Number(resumeIdRaw);
+      if (!Number.isFinite(resumeId)) return c.json({ error: "Invalid resumeId" }, 400);
+      const result = await jobsApi.getJobAnalysis(id, resumeId);
       analysis = result.analysis;
+      cached = result.cached;
     }
-    return c.json({ job, analysis });
+    return c.json({ job, analysis, cached });
   });
 
   protectedApp.get("/jobs/:id/analysis", async (c: Context) => {
-    const id = parseInt(c.req.param("id"));
-    const resumeId = c.req.query("resumeId");
-    if (!resumeId) {
+    const id = Number(c.req.param("id"));
+    if (!Number.isFinite(id)) return c.json({ error: "Invalid job id" }, 400);
+    const resumeIdRaw = c.req.query("resumeId");
+    if (!resumeIdRaw) {
       return c.json({ error: "resumeId query parameter required" }, 400);
     }
-    return c.json(await jobsApi.getJobAnalysis(id, parseInt(resumeId)));
+    const resumeId = Number(resumeIdRaw);
+    if (!Number.isFinite(resumeId)) return c.json({ error: "Invalid resumeId" }, 400);
+    return c.json(await jobsApi.getJobAnalysis(id, resumeId));
   });
 
   protectedApp.post("/jobs/:id/analyze", async (c: Context) => {
-    const id = parseInt(c.req.param("id"));
+    const id = Number(c.req.param("id"));
+    if (!Number.isFinite(id)) return c.json({ error: "Invalid job id" }, 400);
     const { resumeId, forceRefresh } = await c.req.json();
-    if (!resumeId || typeof resumeId !== "number") {
+    if (!resumeId || typeof resumeId !== "number" || !Number.isFinite(resumeId)) {
       return c.json({ error: "resumeId (number) required in body" }, 400);
     }
     try {
-      return c.json(await jobsApi.analyzeJob(id, resumeId, forceRefresh ?? false));
+      const result = await jobsApi.analyzeJob(id, resumeId, forceRefresh ?? false);
+      return c.json({ ...result, cached: false });
     } catch (e) {
       return c.json({ error: (e as Error).message }, 400);
     }
   });
 
   protectedApp.get("/jobs/:id/prescore", async (c: Context) => {
-    const id = parseInt(c.req.param("id"));
-    const resumeId = c.req.query("resumeId");
-    if (!resumeId) {
+    const id = Number(c.req.param("id"));
+    if (!Number.isFinite(id)) return c.json({ error: "Invalid job id" }, 400);
+    const resumeIdRaw = c.req.query("resumeId");
+    if (!resumeIdRaw) {
       return c.json({ error: "resumeId query parameter required" }, 400);
     }
-    return c.json(await jobsApi.getPreScore(id, parseInt(resumeId)));
+    const resumeId = Number(resumeIdRaw);
+    if (!Number.isFinite(resumeId)) return c.json({ error: "Invalid resumeId" }, 400);
+    return c.json(await jobsApi.getPreScore(id, resumeId));
   });
 
   // Resumes API

@@ -1,9 +1,11 @@
 import { db } from "../../../db";
 import { jobAnalysis, jobs, resumes } from "../../../db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { LLMService } from "../../../services/llm";
 import { ConfigManager } from "../../../core/config";
 import crypto from "crypto";
+
+const PROMPT_VERSION = "jobs-v1";
 
 export interface AnalysisResult {
   overallScore: number;
@@ -16,8 +18,8 @@ export interface AnalysisResult {
   model?: string;
 }
 
-function generatePromptHash(jobDescription: string, resumeContent: string): string {
-  const combined = `${jobDescription}::${resumeContent}`;
+function generatePromptHash(jobDescription: string, resumeContent: string, model: string): string {
+  const combined = `${PROMPT_VERSION}::${model}::${jobDescription}::${resumeContent}`;
   return crypto.createHash("sha256").update(combined).digest("hex").substring(0, 32);
 }
 
@@ -63,7 +65,8 @@ export async function getCachedAnalysis(
     return null;
   }
 
-  const promptHash = generatePromptHash(job.description, resume.content);
+  const model = await ConfigManager.get<string>("services.llm.model") ?? "unknown";
+  const promptHash = generatePromptHash(job.description, resume.content, model);
 
   const cached = await db
     .select()
@@ -75,6 +78,7 @@ export async function getCachedAnalysis(
         eq(jobAnalysis.promptHash, promptHash)
       )
     )
+    .limit(1)
     .get();
 
   if (!cached) {
@@ -103,7 +107,8 @@ export async function getLatestAnalysis(
         eq(jobAnalysis.resumeId, resumeId)
       )
     )
-    .orderBy(jobAnalysis.createdAt)
+    .orderBy(desc(jobAnalysis.createdAt))
+    .limit(1)
     .get();
 
   if (!cached) {
@@ -137,7 +142,8 @@ export async function analyzeJobWithResume(
     throw new Error(`Job ${jobId} has no description. Run enrichment first.`);
   }
 
-  const promptHash = generatePromptHash(job.description, resume.content);
+  const model = await ConfigManager.get<string>("services.llm.model") ?? "unknown";
+  const promptHash = generatePromptHash(job.description, resume.content, model);
 
   if (!forceRefresh) {
     const cached = await getCachedAnalysis(jobId, resumeId);
@@ -148,33 +154,33 @@ export async function analyzeJobWithResume(
 
   const llm = new LLMService();
   const rawAnalysis = await llm.analyzeJob(job.description, resume.content);
-
-  const model = await ConfigManager.get<string>("services.llm.model") ?? "unknown";
   const parsed = parseAnalysisResult(rawAnalysis);
 
-  if (parsed.overallScore > 0) {
-    await db
-      .update(jobs)
-      .set({ score: parsed.overallScore, analysis: rawAnalysis })
-      .where(eq(jobs.id, jobId));
-  }
+  await db.transaction(async (tx) => {
+    if (parsed.overallScore > 0) {
+      await tx
+        .update(jobs)
+        .set({ score: parsed.overallScore, analysis: rawAnalysis })
+        .where(eq(jobs.id, jobId));
+    }
 
-  await db
-    .delete(jobAnalysis)
-    .where(and(eq(jobAnalysis.jobId, jobId), eq(jobAnalysis.resumeId, resumeId)));
+    await tx
+      .delete(jobAnalysis)
+      .where(and(eq(jobAnalysis.jobId, jobId), eq(jobAnalysis.resumeId, resumeId)));
 
-  await db.insert(jobAnalysis).values({
-    jobId,
-    resumeId,
-    model,
-    promptHash,
-    result: rawAnalysis,
+    await tx.insert(jobAnalysis).values({
+      jobId,
+      resumeId,
+      model,
+      promptHash,
+      result: rawAnalysis,
+    });
+
+    await tx
+      .update(resumes)
+      .set({ useCount: (resume.useCount ?? 0) + 1 })
+      .where(eq(resumes.id, resumeId));
   });
-
-  await db
-    .update(resumes)
-    .set({ useCount: (resume.useCount ?? 0) + 1 })
-    .where(eq(resumes.id, resumeId));
 
   return { ...parsed, cached: false, model };
 }
