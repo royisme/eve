@@ -1,123 +1,243 @@
-# Eve 🤖 (v2.0)
+<p align="center">
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript"/>
+  <img src="https://img.shields.io/badge/Bun-000000?style=for-the-badge&logo=bun&logoColor=white" alt="Bun"/>
+  <img src="https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React"/>
+  <img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite"/>
+  <img src="https://img.shields.io/badge/Claude_AI-191919?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude AI"/>
+</p>
 
-**Eve** is a modular, local-first **AI Personal Agent Platform**.
-It aggregates your digital life (Email, Web) into a local brain, analyzes it with LLMs, and helps you take action.
+<h1 align="center">Eve & Wall-E</h1>
 
-> **Current Focus**: Job Hunting Copilot (Jarvis for Careers).
+<p align="center">
+  <strong>A Local-First AI Personal Agent Platform</strong><br/>
+  <em>Your Jarvis for the Modern World</em>
+</p>
 
----
-
-## 🏗 Architecture 2.0
-
-Eve is built on a **Kernel + Modules** architecture:
-
-1.  **Kernel (`src/index.ts`)**: The central nervous system.
-    *   **Universal Inbox**: Aggregates signals from all sources (Gmail, etc.).
-    *   **Dispatcher**: Routes signals to the correct Module.
-    *   **AgentManager**: Orchestrates multiple AI sub-agents (Writer, Researcher).
-    *   **ConfigManager**: Persisted configuration in SQLite.
-
-2.  **Modules (`src/modules/*`)**: Independent capabilities.
-    *   **Jobs Module**: The flagship module for recruitment intelligence.
-        *   *Ingest*: Gmail -> Adapter (LinkedIn/Indeed) -> DB.
-        *   *Enrich*: Firecrawl -> Web Page -> Markdown.
-        *   *Analyze*: LLM + Resume -> Fit Score & Strategy.
-
-3.  **Services (`src/services/*`)**:
-    *   **LLM**: Provider-agnostic AI service (Anthropic, OpenAI, Volcengine/Ark).
-    *   **Firecrawl**: Web scraping & markdown conversion.
-    *   **Gmail**: Multi-account fetching & thread decoding.
+<p align="center">
+  <a href="#-features">Features</a> •
+  <a href="#-architecture">Architecture</a> •
+  <a href="#-tech-stack">Tech Stack</a> •
+  <a href="#-current-focus-job-hunting-copilot">Current Focus</a> •
+  <a href="#-roadmap">Roadmap</a>
+</p>
 
 ---
 
-## 🚀 Commands Reference
+## 🎯 What is Eve?
 
-### 1. Global Commands
-| Command | Description |
-| :--- | :--- |
-| `eve sync` | **Core Beat**. Fetches new emails from all accounts (Incremental). |
-| `eve morning` | Generates a Daily Briefing (Report) from all modules. |
-| `eve status` | Checks system health and loaded modules. |
-| `eve models` | Lists available LLM model aliases. |
-| `eve config:set` | Set a configuration key (JSON supported). |
-| `eve config:get` | Get a configuration key. |
+**Eve** is an AI-native personal assistant platform that aggregates your digital signals, analyzes them with LLMs, and helps you take action—all while keeping your data local and private.
 
-### 2. Job Module (`eve jobs:*`)
-| Command | Description |
-| :--- | :--- |
-| `eve jobs:status` | **Dashboard**. Shows the funnel (Inbox -> Enriched -> Analyzed). |
-| `eve jobs:list` | Lists recent jobs with status icons and **Gmail Links**. |
-| `eve jobs:enrich` | Uses **Firecrawl** to scrape deep content from job URLs. |
-| `eve jobs:analyze`| Uses **LLM** to match jobs against your Resume. |
-| `eve jobs:resume` | `<path>` Import your Resume (PDF/MD) for analysis context. |
+Think of it as building your own Jarvis: a modular, extensible system where AI capabilities are first-class citizens.
+
+| Component | Role | Description |
+|-----------|------|-------------|
+| **Eve** | The Mind | Backend intelligence - reasoning, memory, and orchestration |
+| **Wall-E** | The Body | Chrome extension - eyes on the web, hands on the keyboard |
 
 ---
 
-## ⚙️ Configuration Guide
+## ✨ Features
 
-Eve stores config in `eve.db` (sys_config table).
+### Core Platform
 
-### A. Essential Services
+- **🧠 AI-Native Architecture**: Built on a capability-based agent framework where every feature is an LLM-invokable tool
+- **🏠 Local-First**: All data stored locally in SQLite - your information never leaves your machine
+- **🔌 Modular Capabilities**: Add new domains (Jobs, Email, Calendar) as pluggable modules
+- **🌐 Multi-Provider LLM**: Seamlessly switch between Anthropic, OpenAI, or Google models
+- **⚡ Real-time Sync**: SSE-based streaming for live updates
+
+### Current Capability: Job Hunting
+
+- **📥 Intelligent Inbox**: Auto-aggregates job alerts from LinkedIn, Indeed via Gmail
+- **🔍 Deep Analysis**: LLM-powered fit scoring against your resume
+- **📝 Smart Tailoring**: One-click resume customization for each application
+- **📊 Analytics Dashboard**: Funnel visualization, skill gap analysis
+- **🎯 Pre-scoring**: Quick compatibility check before full analysis
+
+---
+
+## 🏗 Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Wall-E (Chrome Extension)                    │
+│                 React • Tailwind • Milkdown Editor              │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │ HTTP / SSE
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         Eve Backend                             │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                    Hono HTTP Server                      │  │
+│  └────────────────────────┬─────────────────────────────────┘  │
+│                           ▼                                     │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │              Eve Agent (pi-agent-core)                   │  │
+│  │                                                          │  │
+│  │   ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌───────────┐  │  │
+│  │   │  Jobs   │  │ Resume  │  │  Email  │  │ Analytics │  │  │
+│  │   │ 8 tools │  │ 6 tools │  │ 3 tools │  │ services  │  │  │
+│  │   └─────────┘  └─────────┘  └─────────┘  └───────────┘  │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                           │                                     │
+│  ┌────────────────────────▼─────────────────────────────────┐  │
+│  │           Services: LLM • Firecrawl • Gmail              │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                           │                                     │
+│  ┌────────────────────────▼─────────────────────────────────┐  │
+│  │                 SQLite + Drizzle ORM                     │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Key Design Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **Capability-based Tools** | Each feature exposed as AgentTool - LLM decides when to invoke |
+| **TypeBox Validation** | Runtime type safety for all tool parameters |
+| **Local SQLite** | Zero-config, portable, privacy-preserving |
+| **Hono + Bun** | Blazing fast HTTP with modern runtime |
+| **SSE for Sync** | Real-time progress without WebSocket complexity |
+
+---
+
+## 🛠 Tech Stack
+
+### Backend (Eve)
+
+| Layer | Technology | Why |
+|-------|------------|-----|
+| Runtime | **Bun** | 3x faster than Node, native TypeScript |
+| HTTP | **Hono** | Ultra-lightweight, edge-ready framework |
+| Database | **SQLite + Drizzle** | Type-safe ORM, zero-config persistence |
+| AI Runtime | **pi-agent-core** | Production-grade agent orchestration |
+| LLM | **Anthropic Claude** | Best reasoning for complex analysis |
+| Scraping | **Firecrawl** | Reliable web content extraction |
+
+### Frontend (Wall-E)
+
+| Layer | Technology | Why |
+|-------|------------|-----|
+| Framework | **React 18** | Component-driven, huge ecosystem |
+| Bundler | **Vite** | Instant HMR, optimized builds |
+| Styling | **Tailwind CSS** | Utility-first, consistent design |
+| Components | **Base UI / Radix** | Accessible primitives |
+| Editor | **Milkdown** | Extensible Markdown WYSIWYG |
+| Extension | **Chrome MV3** | Modern extension architecture |
+
+---
+
+## 🎯 Current Focus: Job Hunting Copilot
+
+The first domain implementation - turning job hunting from a chore into a data-driven process.
+
+### Workflow
+
+```
+📧 Gmail Alert → 🔍 Parse & Store → 🌐 Enrich JD → 🤖 LLM Analysis → 📝 Tailor Resume → 📊 Track Progress
+```
+
+### Implemented Tools (17 AgentTools)
+
+**Jobs Capability (8)**
+- `jobs_search` - Query job database
+- `jobs_list` - List with filters
+- `jobs_enrich` - Scrape full JD
+- `jobs_analyze` - Batch LLM analysis
+- `jobs_analyze_single` - Single job deep analysis
+- `jobs_prescore` - Quick compatibility check
+- `jobs_tailor` - Generate tailored resume
+- `jobs_get_tailored_versions` - Version history
+
+**Resume Capability (6)**
+- `resume_list`, `resume_import`, `resume_get`, `resume_update`, `resume_delete`, `resume_set_default`
+
+**Email Capability (3)**
+- `email_status`, `email_setup`, `email_sync`
+
+---
+
+## 🗺 Roadmap
+
+| Phase | Status | Focus |
+|-------|--------|-------|
+| **1. Foundation** | ✅ Complete | Core framework, capability system |
+| **2. Job Copilot** | 🔄 Current | Full job hunting workflow |
+| **3. Auto-Apply** | 📋 Next | Semi-automated applications |
+| **4. Multi-Domain** | 🔮 Future | Calendar, Contacts, Finance |
+
+### Next Up
+
+- [ ] PDF generation backend (Playwright)
+- [ ] Universal Application Protocol (UAP)
+- [ ] LinkedIn Easy Apply adapter
+- [ ] Voice interface integration
+
+---
+
+## 🚀 Quick Start
+
 ```bash
-# 1. Google Accounts (Array of emails to scan via 'gog' CLI)
-eve config:set services.google.accounts '["me@gmail.com", "linked@gmail.com"]'
+# Prerequisites: Bun v1.0+
 
-# 2. LLM Provider (Anthropic / OpenAI / Ark)
-eve config:set services.llm.base_url "https://ark.cn-beijing.volces.com/api/coding"
-eve config:set services.llm.api_key "sk-..."
-eve config:set services.llm.model "ark-code-latest"
+# Install dependencies
+bun install
 
-# 3. Firecrawl (For Web Scraping)
+# Start the server
+bun run src/index.ts serve
+
+# Or launch TUI dashboard
+bun run src/index.ts
+```
+
+### Configuration
+
+```bash
+# Set up LLM provider
+eve config:set services.llm.provider "anthropic"
+
+# Connect Gmail accounts
+eve config:set services.google.accounts '["your@gmail.com"]'
+
+# Add Firecrawl for web scraping
 eve config:set services.firecrawl.api_key "fc-..."
 ```
 
-### B. Multi-Agent System (`agents.enabled`)
-You can spawn specialized sub-agents by configuring this array:
+---
 
-```bash
-eve config:set agents.enabled '[
-  {
-    "name": "researcher",
-    "provider": "google",
-    "model": "gemini-pro",
-    "systemPrompt": "You are a deep researcher."
-  },
-  {
-    "name": "writer",
-    "provider": "anthropic",
-    "model": "claude-opus"
-  }
-]'
-```
+## 📖 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [ROADMAP.md](docs/ROADMAP.md) | Future plans and milestones |
+| [STATUS.md](docs/STATUS.md) | Current implementation status |
+| [TECH_SPEC.md](docs/TECH_SPEC.md) | Technical architecture details |
+| [AGENTS.md](AGENTS.md) | AI agent development guide |
 
 ---
 
-## 🛠 Development Guide
+## 🤝 Philosophy
 
-### Prerequisites
-- **Bun** (v1.0+)
-- **gog** CLI (installed and authenticated)
-- **pdftotext** (for resume parsing)
+> **Local-first, AI-native, privacy-respecting.**
 
-### Setup
-```bash
-bun install
-bun run src/index.ts init  # (Optional wizard)
-```
+Eve is built on the belief that personal AI assistants should:
 
-### Data Flow (The "Hybrid Funnel")
-1.  **Sync**: `GmailSource` fetches threads using `gog thread get`.
-2.  **Extract**: `LinkedInAdapter` (Cheerio) extracts URLs from HTML body.
-    *   *Fallback*: If no URL found, uses Subject line + Gmail Deep Link.
-3.  **Enrich**: `FirecrawlService` visits the URL to get the real JD (Markdown).
-    *   *Throttle*: 2s delay to respect rate limits.
-4.  **Analyze**: `LLMService` compares JD (Markdown) vs Resume (Text).
-
-### Troubleshooting
-- **No Emails Found?**: Check `gog auth list`. Ensure `services.google.accounts` matches.
-- **Firecrawl 429?**: You hit the rate limit. Wait a minute and retry `jobs:enrich`.
-- **Links Missing?**: Check `debug_email.html` generated by debug scripts to inspect raw HTML.
+1. **Keep your data local** - No cloud dependency for core functionality
+2. **Be transparent** - You control what the AI sees and does
+3. **Be extensible** - Add new capabilities without touching core code
+4. **Be practical** - Solve real problems, not demo toys
 
 ---
 
-**Eve Copilot** (Chrome Extension) is currently in design phase. See `Eve_Copilot_Architecture.md` in Obsidian.
+## 📫 Connect
+
+Built by a software engineer who believes AI should augment human capability, not replace human agency.
+
+**Currently exploring**: AI agent architectures, local-first software, and the future of personal computing.
+
+---
+
+<p align="center">
+  <em>Eve & Wall-E — Building Jarvis, one capability at a time.</em>
+</p>
