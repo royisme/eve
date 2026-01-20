@@ -184,12 +184,34 @@ The first domain implementation - turning job hunting from a chore into a data-d
 # Install dependencies
 bun install
 
-# Start the server
+# Start the server (dev)
 bun run src/index.ts serve
 
-# Or launch TUI dashboard
+# Or launch TUI dashboard (dev)
 bun run src/index.ts
+
+# Build production dist
+npm run build
+
+# Run compiled output
+bun dist/index.js serve
 ```
+
+### Data Directory
+
+Eve stores data in a user-scoped directory by default:
+
+- Default: `~/.config/eve/eve.db`
+- Override: `EVE_DATA_DIR=/custom/path` or `--data-dir=/custom/path`
+
+You should not need to interact with this directory directly.
+
+### Migrations
+
+- Drizzle migrations live in `drizzle/`
+- Build copies them to `dist/drizzle/`
+- App startup runs migrations automatically
+- When schema changes: `npx drizzle-kit generate --name <tag>` and commit `drizzle/`
 
 ### Configuration
 
@@ -203,6 +225,45 @@ eve config:set services.google.accounts '["your@gmail.com"]'
 # Add Firecrawl for web scraping
 eve config:set services.firecrawl.api_key "fc-..."
 ```
+
+---
+
+## 🚢 Release Flow
+
+### Versioning
+
+We use semantic versioning for releases.
+
+- **Patch**: bug fixes, no API changes
+- **Minor**: new capabilities or non-breaking behavior
+- **Major**: breaking changes or data migrations with incompatible behavior
+
+Recommended bump (manual):
+
+- Update version in `package.json`
+- Run `npx drizzle-kit generate --name <tag>` if schema changed
+- Commit changes and tag: `git tag vX.Y.Z`
+
+### CI Build
+
+CI should run:
+
+```bash
+bun install
+npm run build
+bun dist/index.js --help
+```
+
+### Release Artifacts
+
+- `dist/` folder (compiled backend + `dist/drizzle`)
+- Homebrew formula updated to point at the new release artifact
+
+### Upgrade Behavior
+
+- Users upgrade via Homebrew
+- On first run after upgrade, Eve auto-applies new migrations
+- Existing data in `~/.config/eve` is preserved
 
 ---
 

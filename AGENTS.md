@@ -102,6 +102,37 @@ eve/
 
 **All code changes MUST follow this workflow. No exceptions.**
 
+### Daily Dev & Build Flow
+
+**Local dev (source):**
+
+```bash
+bun run src/index.ts        # TUI dashboard
+bun run src/index.ts serve  # HTTP server
+```
+
+**Production build (dist):**
+
+```bash
+npm run build               # tsconfig.build.json -> dist/
+# output: dist/index.js + dist/** + dist/drizzle/
+
+bun dist/index.js serve     # run compiled output
+```
+
+**Migrations:**
+
+- Drizzle SQL lives in `drizzle/`.
+- `dist/` builds copy migrations to `dist/drizzle/`.
+- App startup always runs migrations automatically.
+- When schema changes: run `npx drizzle-kit generate --name <tag>` and commit `drizzle/`.
+
+**Data directory:**
+
+- Default: `~/.config/eve/eve.db`
+- Override: `EVE_DATA_DIR=/custom/path` or `--data-dir=/custom/path`
+- Users should not need to interact with data directory directly.
+
 ### Git Branch Strategy
 
 ```

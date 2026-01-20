@@ -33,7 +33,8 @@
     "query": "bun run src/index.ts query",
     "clean": "bun run src/index.ts clean",
     "start": "bun run src/index.ts",
-    "build": "mkdir -p release && bun build ./src/index.ts --compile --outfile release/eve",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && mkdir -p dist/drizzle && cp -R drizzle/* dist/drizzle/",
+    "start:dist": "bun dist/index.js",
     "check": "oxlint . && tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "prepare": "husky"

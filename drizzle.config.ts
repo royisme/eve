@@ -5,6 +5,6 @@ export default {
   out: "./drizzle",
   dialect: "sqlite",
   dbCredentials: {
-    url: "eve.db",
+    url: process.env.EVE_DB_URL ?? "eve.db",
   },
 } satisfies Config;

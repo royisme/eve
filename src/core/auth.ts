@@ -54,3 +54,22 @@ export async function generateInitialToken(): Promise<{ token?: string; created:
   
   return { token, created: true };
 }
+
+export async function hasPairedDevice(): Promise<boolean> {
+  const existing = await db.select().from(authTokens).limit(1);
+  return existing.length > 0;
+}
+
+export async function createPairingToken(): Promise<string> {
+  await db.delete(authTokens);
+  
+  const token = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("hex");
+  const tokenHash = await hashToken(token);
+  
+  await db.insert(authTokens).values({
+    name: "wall-e-extension",
+    tokenHash: tokenHash,
+  });
+  
+  return token;
+}

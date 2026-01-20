@@ -6,7 +6,7 @@ import { bodyLimit } from "hono/body-limit";
 import { AgentManager } from "./agents/manager";
 import { getCapabilities } from "./capabilities";
 import { Dispatcher } from "./core/dispatcher";
-import { authMiddleware, validateToken } from "./core/auth";
+import { authMiddleware, validateToken, hasPairedDevice, createPairingToken } from "./core/auth";
 import * as jobsApi from "./core/jobs-api";
 import * as resumeApi from "./core/resume-api";
 import * as tailorApi from "./core/tailor-api";
@@ -49,6 +49,53 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
       agent: {
         tools: agent.state.tools.map(t => t.name),
       }
+    });
+  });
+
+  app.get("/auth/verify", async (c: Context) => {
+    const token = c.req.header("x-eve-token");
+    
+    if (!token) {
+      return c.json({ valid: false, reason: "no_token" });
+    }
+    
+    const isValid = await validateToken(token);
+    return c.json({ 
+      valid: isValid, 
+      reason: isValid ? undefined : "invalid_token" 
+    });
+  });
+
+  app.post("/auth/pair", async (c: Context) => {
+    const isPaired = await hasPairedDevice();
+    
+    if (isPaired) {
+      const oldToken = c.req.header("x-eve-token");
+      
+      if (!oldToken) {
+        return c.json({
+          success: false,
+          error: "already_paired",
+          message: "A device is already paired. Provide existing token to re-pair."
+        }, 403);
+      }
+      
+      const isValidOldToken = await validateToken(oldToken);
+      if (!isValidOldToken) {
+        return c.json({
+          success: false,
+          error: "invalid_token",
+          message: "The provided token is invalid."
+        }, 401);
+      }
+    }
+    
+    const newToken = await createPairingToken();
+    
+    return c.json({
+      success: true,
+      token: newToken,
+      message: isPaired ? "Re-pairing successful. Old token invalidated." : "Pairing successful"
     });
   });
 
