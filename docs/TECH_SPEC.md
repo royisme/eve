@@ -1,96 +1,301 @@
-# Technical Specification: Eve & Wall-E (Brainstorm V2)
+# Eve Technical Specification
 
-## 1. Architectural Philosophy: "Light Plugin, Heavy Backend"
+> **Last Updated**: 2026-01-20
+> **Version**: 0.3.0
 
-The V2 architecture shifts complexity away from the client (Wall-E Chrome Extension) to the server (Eve). This approach minimizes extension store update cycles, centralizes logic for rapid iteration, and leverages server-side power for complex tasks like AI processing and PDF generation.
+## Architecture Overview
 
-### Core Tenets
-1.  **Server-Driven UI**: The extension is a dumb renderer; the server dictates the interface.
-2.  **Semantic Intelligence**: Actions are defined by intent ("Apply Button"), not rigid selectors.
-3.  **Resilience**: The system handles network instability and changes in target website DOM structures gracefully.
+Eve follows a **"Kernel + Capabilities"** architecture, running on the `@mariozechner/pi-agent-core` runtime.
 
-## 2. Key Architectural Components
-
-### 2.1 Server-Driven UI (SDUI)
-**Problem**: Hardcoding UI components in the extension requires a full store review for every visual change.
-**Solution**:
--   **Protocol**: Wall-E queries Eve on load or navigation: `GET /ui?url={current_url}`.
--   **Response**: Eve returns a JSON schema describing the UI layout, component hierarchy, and data bindings (e.g., Buttons, Cards).
--   **Rendering**: Wall-E parses this JSON and dynamically renders native React components.
--   **Benefit**: New features (e.g., a "Drafts" tab) can be deployed instantly by updating the Eve backend.
-
-### 2.2 Self-Healing Form Engine
-**Problem**: CSS selectors break frequently as job boards update their DOM.
-**Solution**: **Semantic Locators**.
--   **Mechanism**:
-    1.  Eve stores semantic descriptors for targets (e.g., "The primary submit button", "The input field looking like a LinkedIn URL").
-    2.  When Wall-E cannot find an element with cached selectors, it snapshots the relevant DOM segment.
-    3.  **On-Demand LLM Call**: Eve analyzes the DOM snapshot to identify the correct element ID/Path.
-    4.  **Feedback Loop**: The new selector is cached for future users.
-
-### 2.3 Async Delegation & State Management
-**Problem**: Large scraping tasks or heavy AI generation block the extension UI.
-**Solution**: WebSocket/SSE Push.
--   **Flow**:
-    1.  **Ingest**: Wall-E sends raw context (HTML, Screenshot, User Session) to Eve.
-    2.  **Process**: Eve delegates tasks to background workers (Embeddings generation, Knowledge Graph updates, LLM inference).
-    3.  **Push**: Updates are streamed back to Wall-E via `WebSocket` or `Server-Sent Events` (SSE).
-    4.  **Result**: UI updates in real-time without polling.
-
-### 2.4 Offline Queue Strategy
-**Problem**: Users may operate on unstable connections; data loss is unacceptable.
-**Solution**: Local-First with Sync.
--   **Storage**: Wall-E persists all actions (clicks, form fills, drafts) immediately to `chrome.storage.local`.
--   **Replay**: A background worker monitors connection health.
-    -   *If Offline*: Actions accumulate in a prioritized queue.
-    -   *On Reconnect*: The queue is flushed to Eve sequentially.
-    -   *Conflict Resolution*: "Last-write-wins" or server-guided merge for complex conflicts.
-
-### 2.5 PDF Dynamic Injection
-**Problem**: Uploading a generated resume requires complex file handling usually blocked by browser sandboxes.
-**Solution**: Buffer-to-Drop Event.
--   **Generation**: Eve generates the tailored PDF using a headless renderer (e.g., Puppeteer/Playwright) and returns a binary buffer or signed URL.
--   **Injection**:
-    1.  Wall-E fetches the blob.
-    2.  Wall-E constructs a standard JavaScript `File` object in the content script context.
-    3.  Wall-E synthetically triggers a `drop` event on the target website's drop zone, bypassing the OS file picker dialog entirely.
-
-## 3. Interaction Sequence
-
-```mermaid
-sequenceDiagram
-    participant Site as Job Board
-    participant WallE as Wall-E (Plugin)
-    participant Eve as Eve (Backend)
-    participant LLM as AI Service
-
-    Note over WallE, Eve: 1. Server-Driven UI Load
-    WallE->>Eve: GET /ui?url=linkedin.com/jobs/123
-    Eve-->>WallE: { components: [{ type: "Button", label: "Analyze" }] }
-    WallE->>WallE: Renders UI
-
-    Note over WallE, Eve: 2. Async Analysis
-    WallE->>Eve: POST /analyze (Raw HTML)
-    Eve->>LLM: Extract Job Data
-    Eve-->>WallE: HTTP 202 Accepted (Processing)
-    LLM-->>Eve: Job JSON
-    Eve-->>WallE: (WebSocket) "Job Data Ready"
-
-    Note over WallE, Eve: 3. PDF Injection
-    WallE->>Eve: POST /generate-resume
-    Eve->>Eve: Generate PDF Buffer
-    Eve-->>WallE: PDF Blob
-    WallE->>Site: Dispatch "Drop" Event (File Object)
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Wall-E (Chrome Extension)                │
+│                    React + Tailwind + Milkdown                  │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │ HTTP/SSE
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         Eve Backend                             │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                    Hono HTTP Server                      │  │
+│  │            (Auth Middleware, CORS, Body Limit)           │  │
+│  └────────────────────────┬─────────────────────────────────┘  │
+│                           │                                     │
+│  ┌────────────────────────▼─────────────────────────────────┐  │
+│  │                    Eve Agent Core                         │  │
+│  │               (pi-agent-core runtime)                     │  │
+│  └────────────────────────┬─────────────────────────────────┘  │
+│                           │                                     │
+│  ┌────────────────────────▼─────────────────────────────────┐  │
+│  │                    Capabilities                           │  │
+│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────────────┐ │  │
+│  │  │  Jobs   │ │ Resume  │ │  Email  │ │    Analytics    │ │  │
+│  │  │ 8 tools │ │ 6 tools │ │ 3 tools │ │    (services)   │ │  │
+│  │  └─────────┘ └─────────┘ └─────────┘ └─────────────────┘ │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                           │                                     │
+│  ┌────────────────────────▼─────────────────────────────────┐  │
+│  │                  Shared Services                          │  │
+│  │           LLM | Firecrawl | Gmail | Config               │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                           │                                     │
+│  ┌────────────────────────▼─────────────────────────────────┐  │
+│  │                   SQLite (Drizzle ORM)                    │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## 4. Technical Stack
+---
 
--   **Wall-E (Client)**:
-    -   Chrome Extension Manifest V3
-    -   React (for rendering SDUI)
-    -   `chrome.storage` (Offline queue)
--   **Eve (Server)**:
-    -   Node.js / Python (FastAPI)
-    -   WebSocket Server / SSE
-    -   Puppeteer (PDF Generation)
-    -   Vector DB (Knowledge Graph)
+## Core Components
+
+### 1. Eve Agent (`src/core/agent.ts`)
+
+Central orchestrator built on pi-agent-core.
+
+```typescript
+interface EveAgentConfig {
+  systemPrompt?: string;
+  provider?: string;  // anthropic, openai, google
+  model?: string;
+}
+
+// Factory function
+async function createEveAgent(config?: EveAgentConfig): Promise<Agent>
+```
+
+**Responsibilities**:
+- Initialize all capabilities
+- Collect AgentTools from registered capabilities
+- Handle LLM provider configuration
+- Manage agent lifecycle
+
+### 2. Capability System (`src/capabilities/`)
+
+Each capability is a self-contained domain module.
+
+```typescript
+interface Capability {
+  name: string;
+  description: string;
+  tools: AgentTool[];
+  init?: (ctx: CapabilityContext) => Promise<void>;
+  dispose?: () => Promise<void>;
+}
+
+interface CapabilityContext {
+  db: typeof db;
+  config: typeof ConfigManager;
+}
+```
+
+**Registration** (`src/capabilities/index.ts`):
+```typescript
+// Capabilities auto-register on import
+const [{ jobsCapability }, { emailCapability }, { resumeCapability }] = 
+  await Promise.all([
+    import("./jobs"),
+    import("./email"),
+    import("./resume"),
+  ]);
+```
+
+### 3. AgentTool Definition
+
+Tools use TypeBox for parameter validation:
+
+```typescript
+import { Type } from "@sinclair/typebox";
+import type { AgentTool } from "@mariozechner/pi-agent-core";
+
+const exampleTool: AgentTool = {
+  name: "capability_action",
+  label: "Human-Readable Label",
+  description: "What this tool does (for LLM context)",
+  parameters: Type.Object({
+    param1: Type.String({ description: "Parameter description" }),
+    param2: Type.Optional(Type.Number()),
+  }),
+  execute: async (toolCallId, params, signal, onUpdate) => {
+    // Implementation
+    return {
+      content: [{ type: "text", text: JSON.stringify(result) }]
+    };
+  }
+};
+```
+
+---
+
+## Data Flow
+
+### Job Analysis Flow
+
+```
+1. User: "Analyze job #123"
+           │
+           ▼
+2. Agent receives prompt
+           │
+           ▼
+3. LLM decides to call `jobs_analyze_single` tool
+           │
+           ▼
+4. Tool execution:
+   - Fetch job from DB
+   - Check analysis cache
+   - If not cached: call LLM for analysis
+   - Store in `job_analysis` table
+   - Update job status history
+           │
+           ▼
+5. Return structured result to Agent
+           │
+           ▼
+6. LLM formats response for user
+```
+
+### Resume Tailoring Flow
+
+```
+1. Wall-E: POST /tailor/:jobId { resumeId }
+           │
+           ▼
+2. TailorService:
+   - Fetch job description
+   - Fetch resume content
+   - Check existing tailored versions
+           │
+           ▼
+3. If no version or forceNew:
+   - LLM generates tailored resume
+   - Store in `tailored_resumes` table
+           │
+           ▼
+4. Return { tailoredResume, version, isNew }
+```
+
+---
+
+## HTTP API Design
+
+### Authentication
+
+Bearer token authentication via `auth_tokens` table:
+
+```typescript
+// Middleware: src/core/auth.ts
+Authorization: Bearer <token>
+
+// Token validation
+const isValid = await validateToken(token);
+```
+
+### SSE Streaming
+
+Used for long-running operations:
+
+```typescript
+// Jobs sync with real-time progress
+GET /jobs/sync?token=<token>
+
+// SSE events
+data: {"status":"syncing","fetched":5,"total":20}
+data: {"status":"complete","newJobs":3}
+```
+
+---
+
+## Database Schema
+
+### Key Tables
+
+| Table | Primary Key | Foreign Keys |
+|-------|-------------|--------------|
+| `jobs` | `id` (auto) | - |
+| `resumes` | `id` (auto) | - |
+| `tailored_resumes` | `id` (auto) | `job_id`, `resume_id` |
+| `job_analysis` | `id` (auto) | `job_id`, `resume_id` |
+| `job_status_history` | `id` (auto) | `job_id` |
+| `auth_tokens` | `id` (auto) | - |
+| `sys_config` | `key` | - |
+
+### Deduplication
+
+Jobs use `url_hash` for deduplication:
+```typescript
+urlHash: text('url_hash').unique()
+```
+
+---
+
+## Technology Stack
+
+### Backend (Eve)
+
+| Layer | Technology |
+|-------|------------|
+| Runtime | Bun |
+| HTTP | Hono |
+| Database | SQLite + Drizzle ORM |
+| AI | pi-agent-core + Anthropic/OpenAI/Google |
+| Scraping | Firecrawl |
+| Email | gog CLI (Gmail) |
+
+### Frontend (Wall-E)
+
+| Layer | Technology |
+|-------|------------|
+| Framework | React 18 |
+| Bundler | Vite |
+| Styling | Tailwind CSS |
+| Components | Base UI / Radix |
+| Editor | Milkdown (Markdown) |
+| i18n | Custom (en/zh) |
+| Extension | Chrome MV3 |
+
+---
+
+## Configuration
+
+### Environment Variables
+
+```bash
+ANTHROPIC_API_KEY=sk-...
+OPENAI_API_KEY=sk-...
+GOOGLE_API_KEY=...
+FIRECRAWL_API_KEY=fc-...
+```
+
+### Database Configuration
+
+```bash
+eve config:set services.llm.provider "anthropic"
+eve config:set services.llm.model "claude-3-5-sonnet-20241022"
+eve config:set services.google.accounts '["user@gmail.com"]'
+```
+
+---
+
+## Development Commands
+
+```bash
+# Start TUI dashboard
+bun run src/index.ts
+
+# Start HTTP API server
+bun run src/index.ts serve
+
+# CLI commands
+bun run src/index.ts jobs:list
+bun run src/index.ts email:sync
+```
+
+---
+
+## Related Documentation
+
+- `STATUS.md` - Current implementation status
+- `ROADMAP.md` - Future plans and milestones
+- `UI_SKILLS.md` - Frontend development constraints
+- `AGENTS.md` - AI agent development guide

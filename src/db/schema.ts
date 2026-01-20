@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, integer, text, index } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 export const jobs = sqliteTable('jobs', {
@@ -13,8 +13,10 @@ export const jobs = sqliteTable('jobs', {
   title: text('title'),
   status: text('status').default('inbox'), 
   url: text('url'), 
-  urlHash: text('url_hash'), 
-  threadId: text('thread_id'), 
+  urlHash: text('url_hash').unique(), 
+  threadId: text('thread_id'),
+  firstSeenAt: text('first_seen_at'),
+  lastSeenAt: text('last_seen_at'), 
   
   description: text('description'), 
   analysis: text('analysis'),       
@@ -71,7 +73,10 @@ export const jobStatusHistory = sqliteTable('job_status_history', {
   oldStatus: text('old_status'),
   newStatus: text('new_status').notNull(),
   changedAt: text('changed_at').default(sql`CURRENT_TIMESTAMP`),
-});
+}, (table) => [
+  index('idx_job_status_history_new_status').on(table.newStatus),
+  index('idx_job_status_history_changed_at').on(table.changedAt),
+]);
 
 export const authTokens = sqliteTable('auth_tokens', {
   id: integer('id').primaryKey({ autoIncrement: true }),
