@@ -93,6 +93,16 @@ export const sysConfig = sqliteTable('sys_config', {
   updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const emailAccounts = sqliteTable('email_accounts', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  email: text('email').notNull().unique(),
+  isPrimary: integer('is_primary').default(0),
+  isAuthorized: integer('is_authorized').default(0),
+  alias: text('alias'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  lastSyncAt: text('last_sync_at'),
+});
+
 export const cronJobs = sqliteTable('cron_jobs', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),
@@ -141,3 +151,5 @@ export type CronJob = typeof cronJobs.$inferSelect;
 export type NewCronJob = typeof cronJobs.$inferInsert;
 export type CronRun = typeof cronRuns.$inferSelect;
 export type NewCronRun = typeof cronRuns.$inferInsert;
+export type EmailAccount = typeof emailAccounts.$inferSelect;
+export type NewEmailAccount = typeof emailAccounts.$inferInsert;

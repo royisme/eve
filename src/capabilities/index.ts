@@ -7,14 +7,16 @@ let initialized = false;
 async function ensureInitialized() {
   if (!initialized) {
     initialized = true;
-    const [{ jobsCapability }, { emailCapability }, { resumeCapability }] = await Promise.all([
+    const [{ jobsCapability }, { emailCapability }, { resumeCapability }, { schedulerCapability }] = await Promise.all([
       import("./jobs"),
       import("./email"),
       import("./resume"),
+      import("./scheduler"),
     ]);
     capabilities.push(jobsCapability);
     capabilities.push(emailCapability);
     capabilities.push(resumeCapability);
+    capabilities.push(schedulerCapability);
   }
 }
 
