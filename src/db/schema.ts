@@ -93,6 +93,41 @@ export const sysConfig = sqliteTable('sys_config', {
   updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const cronJobs = sqliteTable('cron_jobs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  description: text('description'),
+  schedule: text('schedule').notNull(),
+  
+  // 执行模式
+  target: text('target').notNull().default('isolated'),  // 'main' | 'isolated'
+  wakeMode: text('wake_mode').default('lazy'),           // 'lazy' | 'now'
+  
+  // 载荷
+  payloadType: text('payload_type').notNull(),
+  payloadParams: text('payload_params'),  // JSON
+  
+  enabled: integer('enabled').default(1),
+  timezone: text('timezone').default('America/Toronto'),
+  
+  lastRunAt: text('last_run_at'),
+  nextRunAt: text('next_run_at'),
+  createdAt: text('created_at').default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const cronRuns = sqliteTable('cron_runs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  jobId: integer('job_id').references(() => cronJobs.id, { onDelete: 'cascade' }),
+  sessionId: text('session_id'),
+  startedAt: text('started_at').notNull(),
+  finishedAt: text('finished_at'),
+  status: text('status').notNull(),
+  resultSummary: text('result_summary'),  // JSON
+  errorMessage: text('error_message'),
+  triggerReason: text('trigger_reason'),
+});
+
 export type Job = typeof jobs.$inferSelect;
 export type NewJob = typeof jobs.$inferInsert;
 export type Resume = typeof resumes.$inferSelect;
@@ -102,3 +137,7 @@ export type JobAnalysis = typeof jobAnalysis.$inferSelect;
 export type JobStatusHistory = typeof jobStatusHistory.$inferSelect;
 export type AuthToken = typeof authTokens.$inferSelect;
 export type SysConfig = typeof sysConfig.$inferSelect;
+export type CronJob = typeof cronJobs.$inferSelect;
+export type NewCronJob = typeof cronJobs.$inferInsert;
+export type CronRun = typeof cronRuns.$inferSelect;
+export type NewCronRun = typeof cronRuns.$inferInsert;
