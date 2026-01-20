@@ -9,6 +9,7 @@ import { Dispatcher } from "./core/dispatcher";
 import { authMiddleware, validateToken } from "./core/auth";
 import * as jobsApi from "./core/jobs-api";
 import * as resumeApi from "./core/resume-api";
+import * as tailorApi from "./core/tailor-api";
 import { syncEmails } from "./capabilities/email/services/email-service";
 
 const DEFAULT_PORT = 3033;
@@ -250,11 +251,54 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
     return c.json({ resume: await resumeApi.setDefaultResume(id) });
   });
 
+  // Tailor API
+  protectedApp.post("/tailor/:jobId", async (c: Context) => {
+    const jobId = Number(c.req.param("jobId"));
+    if (!Number.isFinite(jobId)) return c.json({ error: "Invalid job id" }, 400);
+    const body = await c.req.json();
+    const resumeId = Number(body.resumeId);
+    if (!Number.isFinite(resumeId)) return c.json({ error: "Invalid resumeId" }, 400);
+    const forceNew = body.forceNew === true;
+    try {
+      const result = await tailorApi.tailorResume(jobId, resumeId, forceNew);
+      return c.json(result);
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, 400);
+    }
+  });
+
+  protectedApp.get("/tailor/:jobId", async (c: Context) => {
+    const jobId = Number(c.req.param("jobId"));
+    if (!Number.isFinite(jobId)) return c.json({ error: "Invalid job id" }, 400);
+    const resumeIdRaw = c.req.query("resumeId");
+    const resumeId = resumeIdRaw ? Number(resumeIdRaw) : undefined;
+    if (resumeId !== undefined && !Number.isFinite(resumeId)) {
+      return c.json({ error: "Invalid resumeId" }, 400);
+    }
+    const versions = await tailorApi.getTailoredVersions(jobId, resumeId);
+    return c.json({ versions });
+  });
+
+  protectedApp.put("/tailor/:id", async (c: Context) => {
+    const id = Number(c.req.param("id"));
+    if (!Number.isFinite(id)) return c.json({ error: "Invalid tailor id" }, 400);
+    const body = await c.req.json();
+    if (!body.content || typeof body.content !== "string") {
+      return c.json({ error: "content is required" }, 400);
+    }
+    try {
+      const result = await tailorApi.updateTailoredResume(id, body.content);
+      return c.json({ tailoredResume: result });
+    } catch (e) {
+      return c.json({ error: (e as Error).message }, 400);
+    }
+  });
+
   // Mount protected routes
   app.route("/", protectedApp);
 
   console.log(`🔌 Eve HTTP API listening on http://localhost:${port}`);
-  console.log(`   Endpoints: /health, /agent/status, /chat, /ingest, /jobs, /jobs/:id/analysis, /resumes`);
+  console.log(`   Endpoints: /health, /agent/status, /chat, /ingest, /jobs, /jobs/:id/analysis, /resumes, /tailor`);
 
   Bun.serve({
     port,

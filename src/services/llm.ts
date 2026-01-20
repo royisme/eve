@@ -104,4 +104,37 @@ Format:
             return { company: "Unknown", title: "Unknown", status: "New" };
         }
     }
+
+    async tailorResume(jobDescription: string, resumeContent: string): Promise<string> {
+        await this.ensureInitialized();
+
+        const prompt = `You are an expert resume writer. Tailor the following resume to match the job posting below.
+
+**Job Posting:**
+${jobDescription}
+
+**Original Resume:**
+${resumeContent}
+
+**Instructions:**
+1. Emphasize relevant skills and experiences
+2. Reorder bullet points to highlight job alignment
+3. Adjust keywords to match job description
+4. Keep the structure and format intact
+5. DO NOT fabricate experiences
+
+**Output Format (JSON only):**
+{
+  "content": "The tailored resume in markdown",
+  "suggestions": ["3-5 improvement suggestions"]
+}`;
+
+        try {
+            const response = await this.agentManager!.prompt(undefined, prompt);
+            return response;
+        } catch (e) {
+            console.error("Resume tailoring failed:", e);
+            throw e;
+        }
+    }
 }

@@ -1,0 +1,58 @@
+{
+  "inputs": {
+    "src/capabilities/jobs/tools/analyze.ts": {
+      "bytes": 4744,
+      "imports": [
+        {
+          "path": "@sinclair/typebox",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../services/jobs-service",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../services/analysis-cache",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../../../db",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "../../../db/schema",
+          "kind": "import-statement",
+          "external": true
+        },
+        {
+          "path": "drizzle-orm",
+          "kind": "import-statement",
+          "external": true
+        }
+      ],
+      "format": "esm"
+    }
+  },
+  "outputs": {
+    "./analyze.js": {
+      "bytes": 4565,
+      "inputs": {
+        "src/capabilities/jobs/tools/analyze.ts": {
+          "bytesInOutput": 4448
+        }
+      },
+      "imports": [
+      ],
+      "exports": [
+        "jobPreScoreTool",
+        "analyzeJobsTool",
+        "analyzeJobTool"
+      ],
+      "entryPoint": "src/capabilities/jobs/tools/analyze.ts"
+    }
+  }
+}
