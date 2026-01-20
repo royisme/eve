@@ -24,21 +24,21 @@ Scheduler.registerExecutor('test_task', async (job, sessionId) => {
 });
 
 Scheduler.registerExecutor('email_sync', async (job, _sessionId) => {
-  await ensureAccountsInitialized();
-  
-  const params = job.payloadParams ? JSON.parse(job.payloadParams) : {};
-  const query = params.query || 'from:linkedin OR from:indeed';
-  const maxThreads = params.maxThreads || 50;
-  
-  const authorizedAccounts = await getAuthorizedAccounts();
-  if (authorizedAccounts.length === 0) {
-    return {
-      success: false,
-      error: 'No authorized email accounts found',
-    };
-  }
-
   try {
+    await ensureAccountsInitialized();
+    
+    const params = job.payloadParams ? JSON.parse(job.payloadParams) : {};
+    const query = params.query || 'from:linkedin OR from:indeed';
+    const maxThreads = params.maxThreads || 50;
+    
+    const authorizedAccounts = await getAuthorizedAccounts();
+    if (authorizedAccounts.length === 0) {
+      return {
+        success: false,
+        error: 'No authorized email accounts found',
+      };
+    }
+
     const result = await syncEmails(query, maxThreads);
     
     for (const account of authorizedAccounts) {

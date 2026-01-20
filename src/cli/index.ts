@@ -94,22 +94,32 @@ cli
     
     const { Scheduler } = await import("../core/scheduler");
     await import("../core/scheduler-executors");
-    await Scheduler.start();
     
-    const status = await Scheduler.getStatus();
-    console.log(JSON.stringify(status, null, 2));
+    try {
+      await Scheduler.start();
+      const status = await Scheduler.getStatus();
+      console.log(JSON.stringify(status, null, 2));
+    } finally {
+      await Scheduler.stop();
+    }
   });
 
 cli
   .command("scheduler:run <jobId>", "Run a cron job immediately")
   .action(async (jobId: string) => {
+    const jobIdNum = parseInt(jobId);
+    if (!Number.isFinite(jobIdNum) || jobIdNum <= 0) {
+      console.error(`❌ Invalid job ID: ${jobId}. Must be a positive integer.`);
+      process.exit(1);
+    }
+    
     const { bootstrap } = await import("../core/bootstrap");
     await bootstrap();
     
     const { Scheduler } = await import("../core/scheduler");
     await import("../core/scheduler-executors");
     
-    await Scheduler.runNow(parseInt(jobId));
+    await Scheduler.runNow(jobIdNum);
     console.log(`✅ Job ${jobId} triggered`);
   });
 

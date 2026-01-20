@@ -1,5 +1,6 @@
 import { db } from '../core/db';
 import { cronJobs } from '../db/schema';
+import { eq } from 'drizzle-orm';
 import { Scheduler } from '../core/scheduler';
 import { 
   listAccounts, 
@@ -89,6 +90,17 @@ async function accountsMenu(): Promise<void> {
       const isPrimary = isPrimaryInput.toLowerCase() === 'y';
       
       const isAuthorized = await checkGogAuth(email);
+      
+      if (isPrimary) {
+        const existingAccounts = await listAccounts();
+        for (const acc of existingAccounts) {
+          if (acc.isPrimary) {
+            await setPrimaryAccount(email);
+            break;
+          }
+        }
+      }
+      
       await addAccount(email, { 
         alias: alias || undefined, 
         isPrimary,
@@ -211,7 +223,13 @@ async function jobsMenu(): Promise<void> {
       const job = jobs.find(j => j.id === parseInt(jobId));
       if (job) {
         const newEnabled = job.enabled ? 0 : 1;
-        await db.update(cronJobs).set({ enabled: newEnabled }).where(require('drizzle-orm').eq(cronJobs.id, job.id));
+        await db.update(cronJobs).set({ enabled: newEnabled }).where(eq(cronJobs.id, job.id));
+        
+        const updatedJob = await db.select().from(cronJobs).where(eq(cronJobs.id, job.id)).get();
+        if (updatedJob) {
+          await Scheduler.upsertJob(updatedJob);
+        }
+        
         console.log(`${newEnabled ? '🟢 Enabled' : '⚪ Disabled'} job: ${job.name}`);
       }
       break;

@@ -14,15 +14,19 @@ import { eq } from 'drizzle-orm';
 async function runTests() {
   console.log('🧪 Email Enhancements Test Suite\n');
   
+  if (process.env.NODE_ENV === 'production') {
+    console.error('❌ ERROR: Tests cannot run in production environment');
+    console.error('   Set NODE_ENV to a non-production value to run tests');
+    process.exit(1);
+  }
+  
   const results: { name: string; passed: boolean; error?: string }[] = [];
   
-  // Test 1: Account Service
   console.log('📧 Testing Account Service...');
   try {
     const { addAccount, listAccounts, getPrimaryAccount, setPrimaryAccount, removeAccount } = 
       await import('./capabilities/email/services/account-service');
     
-    // Clean up first
     await db.delete(emailAccounts).run();
     
     // Add accounts

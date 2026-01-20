@@ -41,10 +41,17 @@ export async function getAuthorizedAccounts(): Promise<AccountInfo[]> {
 
 export async function setPrimaryAccount(email: string): Promise<void> {
   await db.transaction(async (tx) => {
+    const account = await tx.select().from(emailAccounts)
+      .where(eq(emailAccounts.email, email)).get();
+    
+    if (!account) {
+      throw new Error(`Account not found: ${email}`);
+    }
+    
     await tx.update(emailAccounts).set({ isPrimary: 0 });
     await tx.update(emailAccounts)
       .set({ isPrimary: 1 })
-      .where(eq(emailAccounts.email, email));
+      .where(eq(emailAccounts.id, account.id));
   });
 }
 
@@ -59,11 +66,20 @@ export async function addAccount(email: string, options?: {
   if (existing) {
     const updates: Partial<EmailAccount> = {};
     if (options?.alias !== undefined) updates.alias = options.alias;
-    if (options?.isPrimary !== undefined) updates.isPrimary = options.isPrimary ? 1 : 0;
     if (options?.isAuthorized !== undefined) updates.isAuthorized = options.isAuthorized ? 1 : 0;
+    
+    // Don't set isPrimary directly - route through setPrimaryAccount
+    if (options?.isPrimary === false) {
+      updates.isPrimary = 0;
+    }
     
     if (Object.keys(updates).length > 0) {
       await db.update(emailAccounts).set(updates).where(eq(emailAccounts.id, existing.id));
+    }
+    
+    // If isPrimary is true, set it via setPrimaryAccount
+    if (options?.isPrimary === true) {
+      await setPrimaryAccount(existing.email);
     }
     
     const updated = await db.select().from(emailAccounts)
@@ -71,12 +87,21 @@ export async function addAccount(email: string, options?: {
     return toAccountInfo(updated!);
   }
   
+  // For new accounts, insert without isPrimary if it's true
   const [result] = await db.insert(emailAccounts).values({
     email,
     alias: options?.alias,
-    isPrimary: options?.isPrimary ? 1 : 0,
+    isPrimary: options?.isPrimary === true ? 0 : (options?.isPrimary ? 1 : 0), // Start as 0 if will be set primary
     isAuthorized: options?.isAuthorized ? 1 : 0,
   }).returning();
+  
+  // Then set as primary via setPrimaryAccount
+  if (options?.isPrimary === true) {
+    await setPrimaryAccount(result.email);
+    const updated = await db.select().from(emailAccounts)
+      .where(eq(emailAccounts.id, result.id)).get();
+    return toAccountInfo(updated!);
+  }
   
   return toAccountInfo(result);
 }

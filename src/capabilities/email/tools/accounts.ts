@@ -78,11 +78,11 @@ export const emailSetPrimaryTool: AgentTool<any, any> = {
       };
     }
 
-    await setPrimaryAccount(email);
+    await setPrimaryAccount(account.email);
 
     return {
-      content: [{ type: "text", text: `⭐ Set **${email}** as the primary account.` }],
-      details: { email, isPrimary: true },
+      content: [{ type: "text", text: `⭐ Set **${account.email}** as the primary account.` }],
+      details: { email: account.email, isPrimary: true },
     };
   },
 };
