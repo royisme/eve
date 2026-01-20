@@ -5,7 +5,6 @@ export interface SkillDefinition {
 }
 
 export const SKILLS: SkillDefinition[] = [
-  // Languages
   { canonical: "TypeScript", aliases: ["typescript", "ts"], category: "languages" },
   { canonical: "JavaScript", aliases: ["javascript", "js", "ecmascript", "es6", "es2015"], category: "languages" },
   { canonical: "Python", aliases: ["python", "py", "python3"], category: "languages" },
@@ -20,7 +19,6 @@ export const SKILLS: SkillDefinition[] = [
   { canonical: "Kotlin", aliases: ["kotlin"], category: "languages" },
   { canonical: "Scala", aliases: ["scala"], category: "languages" },
 
-  // Frameworks
   { canonical: "React", aliases: ["react", "react.js", "reactjs"], category: "frameworks" },
   { canonical: "Vue", aliases: ["vue", "vue.js", "vuejs"], category: "frameworks" },
   { canonical: "Angular", aliases: ["angular", "angularjs", "angular 2", "angular 4", "angular 5"], category: "frameworks" },
@@ -35,7 +33,6 @@ export const SKILLS: SkillDefinition[] = [
   { canonical: "Rails", aliases: ["rails", "ruby on rails", "ror"], category: "frameworks" },
   { canonical: "Svelte", aliases: ["svelte", "sveltekit"], category: "frameworks" },
 
-  // Databases
   { canonical: "PostgreSQL", aliases: ["postgresql", "postgres", "psql"], category: "databases" },
   { canonical: "MySQL", aliases: ["mysql", "mariadb"], category: "databases" },
   { canonical: "MongoDB", aliases: ["mongodb", "mongo"], category: "databases" },
@@ -47,7 +44,6 @@ export const SKILLS: SkillDefinition[] = [
   { canonical: "Cassandra", aliases: ["cassandra"], category: "databases" },
   { canonical: "Firebase", aliases: ["firebase", "firestore"], category: "databases" },
 
-  // Cloud
   { canonical: "AWS", aliases: ["aws", "amazon web services", "amazon aws"], category: "cloud" },
   { canonical: "GCP", aliases: ["gcp", "google cloud", "google cloud platform", "gcp"], category: "cloud" },
   { canonical: "Azure", aliases: ["azure", "microsoft azure", "azure cloud"], category: "cloud" },
@@ -58,7 +54,6 @@ export const SKILLS: SkillDefinition[] = [
   { canonical: "Vercel", aliases: ["vercel", "next.js hosting"], category: "cloud" },
   { canonical: "Netlify", aliases: ["netlify"], category: "cloud" },
 
-  // Tools
   { canonical: "Git", aliases: ["git", "github", "gitlab", "bitbucket", "version control"], category: "tools" },
   { canonical: "CI/CD", aliases: ["ci/cd", "cicd", "ci", "cd", "github actions", "gitlab ci", "jenkins", "circleci"], category: "tools" },
   { canonical: "Jira", aliases: ["jira", "atlassian", "issue tracking"], category: "tools" },
@@ -68,7 +63,6 @@ export const SKILLS: SkillDefinition[] = [
   { canonical: "Bun", aliases: ["bun", "bun.js"], category: "tools" },
   { canonical: "npm", aliases: ["npm", "yarn", "pnpm", "package manager"], category: "tools" },
 
-  // Concepts
   { canonical: "Microservices", aliases: ["microservices", "microservice", "micro-services"], category: "concepts" },
   { canonical: "REST API", aliases: ["rest", "rest api", "restful", "rest api", "http api"], category: "concepts" },
   { canonical: "GraphQL", aliases: ["graphql", "gql", "apollo"], category: "concepts" },
