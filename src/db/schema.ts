@@ -13,8 +13,10 @@ export const jobs = sqliteTable('jobs', {
   title: text('title'),
   status: text('status').default('inbox'), 
   url: text('url'), 
-  urlHash: text('url_hash'), 
-  threadId: text('thread_id'), 
+  urlHash: text('url_hash').unique(), 
+  threadId: text('thread_id'),
+  firstSeenAt: text('first_seen_at'),
+  lastSeenAt: text('last_seen_at'), 
   
   description: text('description'), 
   analysis: text('analysis'),       

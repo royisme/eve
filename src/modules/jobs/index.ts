@@ -10,12 +10,7 @@ import { LLMService } from "../../services/llm";
 import { ConfigManager } from "../../core/config";
 import * as fs from "fs";
 import * as JobsService from "../../capabilities/jobs/services/jobs-service";
-import crypto from "crypto";
-
-function generateUrlHash(url: string): string {
-  const normalizedUrl = url.toLowerCase().replace(/[?#].*$/, "").replace(/\/$/, "");
-  return crypto.createHash("sha256").update(normalizedUrl).digest("hex").substring(0, 16);
-}
+import { generateUrlHash } from "../../capabilities/jobs/services/dedup";
 
 export class JobModule implements EveModule {
   name = "jobs";
@@ -25,6 +20,7 @@ export class JobModule implements EveModule {
     const subject = email.subject || "No Subject";
     const sender = email.from || "Unknown";
     const account = email._account;
+    const now = new Date().toISOString();
 
     const adapter = getAdapter(sender, subject);
     const opportunities = await adapter.extract(email);
@@ -47,7 +43,10 @@ export class JobModule implements EveModule {
           where: eq(jobs.urlHash, urlHash),
         });
         if (existingByUrl) {
-          console.log(`⏭️ [JobModule] Skipping duplicate (URL): ${opp.title} @ ${opp.company}`);
+          await db.update(jobs)
+            .set({ lastSeenAt: now })
+            .where(eq(jobs.urlHash, urlHash));
+          console.log(`⏭️ [JobModule] Updated lastSeenAt for duplicate (URL): ${opp.title} @ ${opp.company}`);
           continue;
         }
       }
@@ -56,6 +55,9 @@ export class JobModule implements EveModule {
         where: and(eq(jobs.subject, subject), eq(jobs.sender, sender)),
       });
       if (existingBySubject) {
+        await db.update(jobs)
+          .set({ lastSeenAt: now })
+          .where(eq(jobs.id, existingBySubject.id));
         continue;
       }
 
@@ -64,7 +66,7 @@ export class JobModule implements EveModule {
         sender: sender,
         subject: subject,
         snippet: email.snippet || "",
-        receivedAt: new Date().toISOString(),
+        receivedAt: now,
         company: opp.company,
         title: opp.title,
         status: "inbox",
@@ -72,6 +74,8 @@ export class JobModule implements EveModule {
         urlHash: urlHash,
         threadId: email.threadId,
         rawBody: opp.originalBody,
+        firstSeenAt: now,
+        lastSeenAt: now,
       });
       console.log(
         `✅ [JobModule] Saved: ${opp.title} @ ${opp.company} (via ${adapter.name})`,
