@@ -1,11 +1,12 @@
-import { 
-  TUI, 
-  ProcessTerminal, 
-  Box, 
-  Text, 
-  Container, 
-  matchesKey, 
-  Key 
+import {
+  TUI,
+  ProcessTerminal,
+  Box,
+  Text,
+  Container,
+  matchesKey,
+  Key,
+  type Component,
 } from "@mariozechner/pi-tui";
 import { bootstrap, shutdown } from "../core/bootstrap";
 import { ChatTab } from "./tabs/chat";
@@ -26,20 +27,22 @@ class EveApp extends Container {
   private header: Box;
   private contentArea: Container;
   private footer: Box;
-  private headerText: Text | undefined;
+  private headerText: Text;
   private initialized = false;
 
   constructor(tui: TUI) {
     super();
     this.tui = tui;
 
-    this.header = new Box(1, 0, undefined);
+    this.header = new Box(1, 0);
+    this.headerText = new Text("");
+    this.header.addChild(this.headerText);
     this.addChild(this.header);
 
     this.contentArea = new Container();
     this.addChild(this.contentArea);
 
-    this.footer = new Box(1, 0, undefined);
+    this.footer = new Box(1, 0);
     this.footer.addChild(new Text("1-3: Switch Tab | q: Quit | Arrows: Navigate"));
     this.addChild(this.footer);
 
@@ -73,28 +76,35 @@ class EveApp extends Container {
       return;
     }
 
-    if (data === "1") { this.switchTab("chat"); return; }
-    if (data === "2") { this.switchTab("email"); return; }
-    if (data === "3") { this.switchTab("jobs"); return; }
+    if (data === "1") {
+      this.switchTab("chat");
+      return;
+    }
+    if (data === "2") {
+      this.switchTab("email");
+      return;
+    }
+    if (data === "3") {
+      this.switchTab("jobs");
+      return;
+    }
 
     const activeTab = this.tabComponents[this.currentTab];
     if (activeTab && "handleInput" in activeTab) {
-      (activeTab as Container & { handleInput?: (data: string) => void }).handleInput?.(data);
+      (activeTab as Component).handleInput?.(data);
     }
   }
 
   switchTab(tab: TabType) {
     this.currentTab = tab;
-    
-    while (this.contentArea.children.length > 0) {
-      this.contentArea.removeChild(this.contentArea.children[0]);
-    }
-    
+
+    this.contentArea.clear();
+
     const activeTab = this.tabComponents[tab];
     if (activeTab) {
       this.contentArea.addChild(activeTab);
     }
-    
+
     this.updateHeaderVisuals();
     this.tui.requestRender();
   }
@@ -102,24 +112,25 @@ class EveApp extends Container {
   updateHeaderVisuals() {
     const tabsStr = TABS.map((tab, i) => {
       const isSelected = this.currentTab === tab.key;
-      const prefix = isSelected ? "\x1b[1;32m" : "\x1b[90m"; 
+      const prefix = isSelected ? "\x1b[1;32m" : "\x1b[90m";
       const reset = "\x1b[0m";
       return `${prefix}[${i + 1}] ${tab.icon} ${tab.label}${reset}`;
     }).join("   ");
-    
-    if (!this.headerText) {
-      this.headerText = new Text(tabsStr);
-      this.header.addChild(this.headerText);
-    } else {
-      this.headerText.setText(tabsStr);
-    }
+
+    this.headerText.setText(tabsStr);
+  }
+
+  invalidate(): void {
+    this.header.invalidate();
+    this.contentArea.invalidate();
+    this.footer.invalidate();
   }
 
   render(width: number): string[] {
     const headerLines = this.header.render(width);
     const footerLines = this.footer.render(width);
     const contentLines = this.contentArea.render(width);
-    
+
     return [...headerLines, ...contentLines, ...footerLines];
   }
 }
@@ -131,10 +142,10 @@ const app = new EveApp(tui);
 tui.addChild(app);
 
 terminal.start(
-  (data) => {
+  (data: string) => {
     app.handleInput(data);
     tui.requestRender();
-  }, 
+  },
   () => tui.requestRender()
 );
 

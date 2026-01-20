@@ -98,6 +98,75 @@ eve/
 
 ---
 
+## Development Workflow (MANDATORY)
+
+**All code changes MUST follow this workflow. No exceptions.**
+
+### Git Branch Strategy
+
+```
+main (protected)
+  └── feat/<feature-name>    # New features
+  └── fix/<issue-name>       # Bug fixes
+  └── refactor/<scope>       # Refactoring
+  └── docs/<topic>           # Documentation updates
+```
+
+### Required Steps
+
+| Step | Action | Command |
+|------|--------|---------|
+| 1. Create Branch | Branch off `main` with descriptive name | `git checkout -b feat/my-feature` |
+| 2. Develop | Make changes, commit frequently | `git commit -m "feat: add X"` |
+| 3. Push | Push branch to remote | `git push -u origin feat/my-feature` |
+| 4. Create PR | Open Pull Request for review | `gh pr create --title "feat: ..." --body "..."` |
+| 5. Review | Wait for code review approval | Request review from maintainer |
+| 6. Merge | Merge after approval | Squash merge to `main` |
+
+### Commit Message Format
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+```
+
+| Type | Usage |
+|------|-------|
+| `feat` | New feature |
+| `fix` | Bug fix |
+| `refactor` | Code restructuring (no behavior change) |
+| `docs` | Documentation only |
+| `chore` | Build, deps, configs |
+| `test` | Adding/updating tests |
+
+### AI Agent Instructions
+
+When implementing features:
+
+1. **ALWAYS** create a feature branch before making changes
+2. **NEVER** commit directly to `main`
+3. **ALWAYS** create a PR after completing work
+4. **WAIT** for user review before merging
+5. Use `gh pr create` to create PRs with meaningful descriptions
+
+```bash
+# Example workflow for AI agents
+git checkout -b feat/new-capability
+# ... make changes ...
+git add -A
+git commit -m "feat(jobs): add resume tailoring service"
+git push -u origin feat/new-capability
+gh pr create --title "feat(jobs): add resume tailoring" --body "## Summary
+- Added TailorService for LLM-based resume customization
+- Created API endpoints for tailor operations
+- Integrated with Wall-E workspace"
+```
+
+---
+
 ## Documentation Reference
 
 - `docs/PRD.md` - Product vision
