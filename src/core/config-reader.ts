@@ -11,7 +11,7 @@ const CONFIG_FILE = "eve.json";
 const DEFAULT_CONFIG: EveConfig = {
   providers: {
     anthropic: {
-      api_key: process.env.ANTHROPIC_API_KEY || "",
+      api_key: process.env.ANTHROPIC_API_KEY || "YOUR_API_KEY_HERE",
       base_url: null,
       timeout_ms: 30000,
     },
