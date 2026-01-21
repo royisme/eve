@@ -1,15 +1,15 @@
-import { eq, inArray, lt } from "drizzle-orm";
+import { eq, inArray, lt, sql } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { getContextDb } from "./db";
 import { contexts } from "./schema";
 
-export type ContextCompression = "none" | "json";
+export type ContextCompression = "none" | "gzip";
 
 export interface ContextItem {
   id: string;
   type: string;
   agentId?: string;
-  content: string;
+  content: unknown;
   contentHash?: string;
   embedding?: string;
   parentIds?: string[];
@@ -31,7 +31,8 @@ export class ContextStore {
     }
     
     const str = JSON.stringify(content);
-    const compressed = Bun.gzipSync(Buffer.from(str));
+    const uint8Array = new TextEncoder().encode(str);
+    const compressed = Bun.gzipSync(uint8Array);
     return Buffer.from(compressed).toString("base64");
   }
 
@@ -44,9 +45,16 @@ export class ContextStore {
       }
     }
 
-    const buffer = Buffer.from(content, "base64");
-    const decompressed = Bun.gunzipSync(buffer);
-    return JSON.parse(decompressed.toString());
+    const binaryString = atob(content);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    
+    const decompressed = Bun.gunzipSync(bytes);
+    const text = new TextDecoder().decode(decompressed);
+    return JSON.parse(text);
   }
 
   async save(input: {
@@ -58,7 +66,7 @@ export class ContextStore {
     expiresAt?: string | null;
     compression?: ContextCompression;
   }): Promise<ContextItem> {
-    const compression = input.compression || "json";
+    const compression = input.compression || "gzip";
     const compressedContent = this.compress(input.content, compression);
     const now = new Date().toISOString();
     
@@ -73,6 +81,7 @@ export class ContextStore {
       type: input.type,
       agentId: input.agentId,
       content: compressedContent,
+      compression,
       contentHash: hash,
       parentIds: input.parentIds ? JSON.stringify(input.parentIds) : undefined,
       metadata: input.metadata ? JSON.stringify(input.metadata) : undefined,
@@ -85,9 +94,17 @@ export class ContextStore {
     await this.db.insert(contexts).values(newContext);
 
     return {
-        ...newContext,
+        id: newContext.id,
+        type: newContext.type,
+        agentId: newContext.agentId,
+        content: input.content,
+        contentHash: newContext.contentHash,
         parentIds: input.parentIds,
-        metadata: input.metadata
+        metadata: input.metadata,
+        createdAt: newContext.createdAt,
+        expiresAt: newContext.expiresAt,
+        accessedAt: newContext.accessedAt,
+        accessCount: newContext.accessCount,
     };
   }
 
@@ -104,43 +121,73 @@ export class ContextStore {
   async getMany(ids: string[]): Promise<ContextItem[]> {
     if (ids.length === 0) return [];
     
-    const results = await this.db.select().from(contexts).where(inArray(contexts.id, ids)).all();
-    
-    const foundIds = results.map(r => r.id);
-    if (foundIds.length > 0) {
-        foundIds.forEach(id => this.touch(id).catch(console.error));
+    const results = await this.db
+      .select()
+      .from(contexts)
+      .where(inArray(contexts.id, ids))
+      .all();
+
+    if (results.length > 0) {
+      const now = new Date().toISOString();
+      await this.db.update(contexts)
+        .set({ accessedAt: now })
+        .where(inArray(contexts.id, results.map(r => r.id)));
     }
 
-    return results.map(r => this.mapToItem(r));
+    // Sort by input ID order
+    const orderById = new Map(ids.map((id, index) => [id, index]));
+    const sorted = results.sort((a, b) => {
+      const aIndex = orderById.get(a.id) ?? Number.POSITIVE_INFINITY;
+      const bIndex = orderById.get(b.id) ?? Number.POSITIVE_INFINITY;
+      return aIndex - bIndex;
+    });
+
+    return sorted.map(r => this.mapToItem(r));
   }
 
   async touch(id: string): Promise<void> {
     const now = new Date().toISOString();
     await this.db.update(contexts)
-        .set({ accessedAt: now })
+        .set({ 
+          accessedAt: now,
+          accessCount: sql`${contexts.accessCount} + 1`
+        })
         .where(eq(contexts.id, id));
   }
 
   async deleteExpired(now?: string): Promise<number> {
     const threshold = now || new Date().toISOString();
-    const result = await this.db.delete(contexts).where(lt(contexts.expiresAt, threshold));
-    return (result as any)?.rowsAffected || 0;
+    const deleted = await this.db
+      .delete(contexts)
+      .where(lt(contexts.expiresAt, threshold))
+      .returning({ id: contexts.id });
+    return deleted.length;
   }
 
   private mapToItem(row: typeof contexts.$inferSelect): ContextItem {
+    const compression = (row as any).compression || "gzip";
     return {
       id: row.id,
       type: row.type,
       agentId: row.agentId || undefined,
-      content: row.content,
+      content: this.decompress(row.content, compression),
       contentHash: row.contentHash || undefined,
       embedding: row.embedding || undefined,
-      parentIds: row.parentIds ? JSON.parse(row.parentIds) : undefined,
-      metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
+      parentIds: row.parentIds ? this.safeJsonParse<string[]>(row.parentIds) : undefined,
+      metadata: row.metadata ? this.safeJsonParse<Record<string, unknown>>(row.metadata) : undefined,
       createdAt: row.createdAt,
       expiresAt: row.expiresAt,
       accessedAt: row.accessedAt,
       accessCount: row.accessCount || 0
     };
+  }
+
+  private safeJsonParse<T>(str: string): T | undefined {
+    try {
+      return JSON.parse(str) as T;
+    } catch {
+      console.error("[ContextStore] Failed to parse JSON field");
+      return undefined;
+    }
   }
 }

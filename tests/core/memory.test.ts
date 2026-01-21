@@ -1,28 +1,31 @@
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
 import { FileSystemMemoryManager, DailySessionEntry } from "../../src/core/memory/MemoryManager";
-import { existsSync, readFileSync, unlinkSync, mkdirSync } from "fs";
+import { existsSync, readFileSync, unlinkSync, mkdirSync, rmSync } from "fs";
 import { join } from "path";
 import { getDataDir } from "../../src/core/data-dir";
+import { tmpdir } from "os";
 
 describe("MemoryManager", () => {
   let manager: FileSystemMemoryManager;
   const testAgentId = "test_agent_memory";
+  let tempDir: string;
 
   beforeAll(() => {
+    // Create temp dir for test isolation
+    tempDir = join(tmpdir(), "eve-test-memory", testAgentId);
+    process.env.EVE_DATA_DIR = tempDir;
     manager = new FileSystemMemoryManager();
   });
 
   afterAll(() => {
-    // Cleanup test agent memory
-    const baseDir = getDataDir();
-    const agentDir = join(baseDir, "agents", testAgentId, "memory");
-    try {
-      // Simple cleanup of the whole agent memory dir
-      // In a real test we'd use a recursive delete
-      const dailyFile = join(agentDir, "daily", new Date().toISOString().split("T")[0] + ".json");
-      if (existsSync(dailyFile)) unlinkSync(dailyFile);
-    } catch (e) {
-      // Ignore cleanup errors
+    // Cleanup temp dir
+    if (tempDir) {
+        try {
+            rmSync(tempDir, { recursive: true, force: true });
+        } catch (e) {
+            // Ignore cleanup errors
+        }
+        delete process.env.EVE_DATA_DIR;
     }
   });
 

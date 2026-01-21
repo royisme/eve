@@ -66,7 +66,7 @@ export interface Capability {
  */
 export interface ToolResult {
   content: Array<{ type: "text"; text: string }>;
-   details?: Record<string, unknown>;
+  details?: Record<string, unknown>;
 }
 
 export { type AgentTool };

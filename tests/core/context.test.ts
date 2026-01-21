@@ -1,12 +1,22 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "bun:test";
 import { ContextStore } from "../../src/core/context/ContextStore";
-import { getContextDb } from "../../src/core/context/db";
+import { getContextDb, closeContextDb } from "../../src/core/context/db";
 import { contexts } from "../../src/core/context/schema";
+import { mkdirSync, rmSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 
 describe("ContextStore", () => {
   let store: ContextStore;
+  let testDbPath: string;
 
   beforeAll(() => {
+    // Create temp dir for test isolation
+    const tempDir = join(tmpdir(), "eve-test-context");
+    mkdirSync(tempDir, { recursive: true });
+    testDbPath = join(tempDir, "context.db");
+    process.env.EVE_DATA_DIR = tempDir;
+    
     store = new ContextStore();
   });
 
@@ -18,13 +28,24 @@ describe("ContextStore", () => {
   afterAll(() => {
     const db = getContextDb();
     db.delete(contexts).run();
+    closeContextDb();
+    // Cleanup temp dir
+    if (testDbPath) {
+        const tempDir = testDbPath.replace("/context.db", "");
+        try {
+            rmSync(tempDir, { recursive: true, force: true });
+        } catch (e) {
+            // Ignore cleanup errors
+        }
+        delete process.env.EVE_DATA_DIR;
+    }
   });
 
   it("should save and retrieve a context item", async () => {
     const item = await store.save({
       type: "test_result",
       content: { message: "Hello World", value: 42 },
-      compression: "json"
+      compression: "gzip"
     });
 
     expect(item.id).toStartWith("ctx_");

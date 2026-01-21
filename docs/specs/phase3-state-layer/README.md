@@ -5,9 +5,9 @@
 - [x] Codebase Exploration
 - [x] Documentation (Contracts)
 - [x] Task Breakdown
-- [ ] Readiness Gate
-- [ ] Implementation
-- [ ] Review
+- [x] Readiness Gate
+- [x] Implementation
+- [x] Review
 
 ## Decisions
 1. **Context DB Isolation**: Using a dedicated `context.db` instead of adding to main `eve.db`. This keeps the core lightweight and modular.

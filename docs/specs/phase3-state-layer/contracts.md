@@ -19,6 +19,7 @@ export const contexts = sqliteTable("contexts", {
   type: text("type").notNull(),                // e.g., "extraction_result", "job_analysis"
   agentId: text("agent_id"),                   // ID of the agent that produced this context
   content: text("content").notNull(),          // Compressed JSON payload (base64 string)
+  compression: text("compression").default("gzip"), // Compression method: "gzip" or "none"
   contentHash: text("content_hash"),           // SHA256 hash for deduplication
   embedding: text("embedding"),                // Optional: Serialized vector (base64)
   parentIds: text("parent_ids"),               // JSON array of parent context IDs
@@ -39,13 +40,13 @@ export const contexts = sqliteTable("contexts", {
 ```typescript
 // src/core/context/ContextStore.ts
 
-export type ContextCompression = "none" | "json";
+export type ContextCompression = "none" | "gzip";
 
 export interface ContextItem {
   id: string;
   type: string;
   agentId?: string;
-  content: string;            // Stored payload (potentially compressed)
+  content: unknown;            // Decompressed content
   contentHash?: string;
   embedding?: string;
   parentIds?: string[];
@@ -100,7 +101,8 @@ The Memory System manages agent-specific state using the filesystem.
 It provides Long-term memory (Markdown) and Short-term memory (Daily JSON logs).
 
 ### File Structure
-```
+
+```text
 ~/.config/eve/agents/{agentId}/
   ├── memory/
   │   ├── long-term.md

@@ -1,48 +1,38 @@
 {
   "name": "eve",
-  "module": "src/index.ts",
+  "version": "0.3.0",
   "type": "module",
-  "devDependencies": {
-    "@types/bun": "latest",
-    "@types/node": "^25.0.9",
-    "@types/react": "^19.2.8",
-    "@types/uuid": "^10.0.0",
-    "husky": "^9.1.7",
-    "lint-staged": "^16.2.7",
-    "oxlint": "^1.39.0",
-    "typescript": "5.4.5"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.71.2",
-    "@mariozechner/pi-agent-core": "^0.48.0",
-    "@mariozechner/pi-ai": "^0.48.0",
-    "@mariozechner/pi-tui": "^0.49.2",
-    "@mendable/firecrawl-js": "^4.11.1",
-    "better-sqlite3": "^12.6.0",
-    "cac": "^6.7.14",
-    "cheerio": "^1.1.2",
-    "croner": "^8.1.2",
-    "drizzle-kit": "^0.31.8",
-    "drizzle-orm": "^0.45.1",
-    "hono": "^4.11.4",
-    "open": "^11.0.0",
-    "react": "^19.2.3",
-    "uuid": "^13.0.0",
-    "zod": "^3.24.1"
-  },
   "scripts": {
-    "ingest": "bun run src/index.ts ingest",
-    "query": "bun run src/index.ts query",
-    "clean": "bun run src/index.ts clean",
-    "start": "bun run src/index.ts",
     "build": "bun run scripts/generate-schema.ts && rm -rf dist && tsc -p tsconfig.build.json && mkdir -p dist/drizzle && cp -R drizzle/* dist/drizzle/ && cp schema.json dist/",
-    "start:dist": "bun dist/index.js",
-    "check": "oxlint . && tsc --noEmit",
+    "dev": "bun run src/index.ts serve",
+    "start": "bun run dist/index.js serve",
     "typecheck": "tsc --noEmit",
-    "prepare": "husky",
-    "generate-schema": "bun run scripts/generate-schema.ts"
+    "test": "bun test",
+    "db:generate": "npx drizzle-kit generate",
+    "db:migrate": "npx drizzle-kit migrate",
+    "db:studio": "npx drizzle-kit studio"
   },
-  "lint-staged": {
-    "*.ts": "oxlint"
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@google-cloud/local-auth": "^3.0.0",
+    "@mariozechner/pi-agent-core": "^1.1.1",
+    "@mariozechner/pi-ai": "^1.0.0",
+    "drizzle-orm": "^0.38.2",
+    "drizzle-orm/bun-sqlite": "^0.38.2",
+    "firecrawl-sdk": "^1.5.0",
+    "googleapis": "^144.0.0",
+    "hono": "^4.6.1",
+    "openai": "^4.70.0",
+    "uuid": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.0",
+    "@types/node": "^22.10.0",
+    "bun-types": "^1.1.0",
+    "drizzle-kit": "^0.30.4",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.2"
   }
 }

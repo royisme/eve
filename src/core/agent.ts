@@ -78,16 +78,8 @@ export async function initializeCapabilities(): Promise<void> {
   } catch (e) {
     console.error("[Eve] Failed to clean up contexts", e);
   }
-  
-  // Clean up old daily logs (default 7 days)
-  const memory = getMemoryManager();
-  // Ideally we'd iterate over configured agents, but for now we rely on agents creating their own dir
-  // or we clean up known agent IDs from config.
-  // For MVP, we skip global agent iteration or rely on capability init doing it if needed.
-  // A simple approach: The MemoryManager cleanupOldDaily is agent-specific.
-  // If we don't know the agent IDs, we can't clean them all.
-  // But wait, FileSystemMemoryManager.getAgentDir creates dirs on demand.
-  // Let's skip auto-cleanup of all agents for now as it's low priority for MVP.
+
+  // TODO: Daily memory cleanup requires iterating known agent IDs (deferred for MVP)
 }
 
 export async function createEveAgent(config: EveAgentConfig = {}): Promise<Agent> {

@@ -5,6 +5,7 @@ export const contexts = sqliteTable("contexts", {
   type: text("type").notNull(),                // e.g., "extraction_result", "job_analysis"
   agentId: text("agent_id"),                   // ID of the agent that produced this context
   content: text("content").notNull(),          // Compressed JSON payload (base64 string)
+  compression: text("compression").default("gzip"), // Compression method
   contentHash: text("content_hash"),           // SHA256 hash for deduplication
   embedding: text("embedding"),                // Optional: Serialized vector (base64)
   parentIds: text("parent_ids"),               // JSON array of parent context IDs

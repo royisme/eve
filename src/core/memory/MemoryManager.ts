@@ -1,4 +1,5 @@
-import { writeFileSync, mkdirSync, readFileSync, existsSync, rmSync, readdirSync, statSync } from "fs";
+import { writeFile, mkdir, readFile, rm, readdir } from "fs/promises";
+import { existsSync } from "fs";
 import { join, parse } from "path";
 import { getDataDir } from "../data-dir";
 
@@ -35,29 +36,26 @@ export class FileSystemMemoryManager implements MemoryManager {
   private getAgentDir(agentId: string): string {
     const baseDir = getDataDir();
     const agentDir = join(baseDir, "agents", agentId, "memory");
-    mkdirSync(agentDir, { recursive: true });
-    mkdirSync(join(agentDir, "daily"), { recursive: true });
     return agentDir;
   }
 
-  private getLongTermPath(agentId: string): string {
-    return join(this.getAgentDir(agentId), "long-term.md");
-  }
-
-  private getDailyPath(agentId: string, date: string): string {
-    return join(this.getAgentDir(agentId), "daily", `${date}.json`);
+  private async ensureDirs(agentId: string): Promise<void> {
+    const agentDir = this.getAgentDir(agentId);
+    await mkdir(agentDir, { recursive: true });
+    await mkdir(join(agentDir, "daily"), { recursive: true });
   }
 
   async appendToLongTerm(agentId: string, content: string): Promise<void> {
-    const path = this.getLongTermPath(agentId);
+    await this.ensureDirs(agentId);
+    const filePath = join(this.getAgentDir(agentId), "long-term.md");
     const timestamp = new Date().toISOString();
     const entry = `\n\n## Update ${timestamp}\n${content}`;
 
-    if (!existsSync(path)) {
+    if (!existsSync(filePath)) {
       const header = `# Agent: ${agentId}\n\n## Preferences\n\n## Learnings\n\n## Patterns\n`;
-      writeFileSync(path, header + entry);
+      await writeFile(filePath, header + entry);
     } else {
-      writeFileSync(path, entry, { flag: "a" });
+      await writeFile(filePath, entry, { flag: "a" });
     }
   }
 
@@ -66,32 +64,33 @@ export class FileSystemMemoryManager implements MemoryManager {
   }
 
   async recordToDaily(agentId: string, entry: DailySessionEntry): Promise<void> {
+    await this.ensureDirs(agentId);
     const today = new Date().toISOString().split("T")[0];
-    const path = this.getDailyPath(agentId, today);
+    const filePath = join(this.getAgentDir(agentId), "daily", `${today}.json`);
 
     let memory: DailyMemory = { date: today, sessions: [] };
 
-    if (existsSync(path)) {
+    if (existsSync(filePath)) {
       try {
-        const content = readFileSync(path, "utf-8");
+        const content = await readFile(filePath, "utf-8");
         const parsed = JSON.parse(content);
         if (parsed.date === today) {
             memory = parsed;
         }
       } catch (e) {
-        // If corrupted, overwrite
+        console.error(`[MemoryManager] Failed to parse daily memory, overwriting: ${filePath}`, e);
       }
     }
 
     memory.sessions.push(entry);
-    writeFileSync(path, JSON.stringify(memory, null, 2));
+    await writeFile(filePath, JSON.stringify(memory, null, 2));
   }
 
   async cleanupOldDaily(agentId: string, retentionDays: number): Promise<void> {
     const dailyDir = join(this.getAgentDir(agentId), "daily");
     if (!existsSync(dailyDir)) return;
 
-    const files = readdirSync(dailyDir);
+    const files = await readdir(dailyDir);
     const now = Date.now();
     let count = 0;
 
@@ -101,12 +100,20 @@ export class FileSystemMemoryManager implements MemoryManager {
         
         if (!parsed.name.match(/^\d{4}-\d{2}-\d{2}$/)) continue;
 
-        const fileDate = new Date(parsed.name).getTime();
-        const diffDays = (now - fileDate) / (1000 * 60 * 60 * 24);
+        const fileDateStr = parsed.name;
+        const fileDate = new Date(fileDateStr);
+        if (isNaN(fileDate.getTime())) continue;
+        
+        const fileDateUTC = Date.UTC(fileDate.getFullYear(), fileDate.getMonth(), fileDate.getDate());
+        const diffDays = (now - fileDateUTC) / (1000 * 60 * 60 * 24);
 
         if (diffDays > retentionDays) {
-            rmSync(filePath);
-            count++;
+            try {
+                await rm(filePath);
+                count++;
+            } catch (e) {
+                console.error(`[MemoryManager] Failed to delete ${filePath}:`, e);
+            }
         }
     }
     console.log(`[MemoryManager] Cleaned up ${count} old daily files for agent ${agentId}`);
