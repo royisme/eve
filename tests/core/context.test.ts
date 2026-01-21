@@ -8,15 +8,12 @@ import { tmpdir } from "os";
 
 describe("ContextStore", () => {
   let store: ContextStore;
-  let testDbPath: string;
+  let tempDir: string;
 
   beforeAll(() => {
-    // Create temp dir for test isolation
-    const tempDir = join(tmpdir(), "eve-test-context");
+    tempDir = join(tmpdir(), "eve-test-context");
     mkdirSync(tempDir, { recursive: true });
-    testDbPath = join(tempDir, "context.db");
     process.env.EVE_DATA_DIR = tempDir;
-    
     store = new ContextStore();
   });
 
@@ -29,9 +26,7 @@ describe("ContextStore", () => {
     const db = getContextDb();
     db.delete(contexts).run();
     closeContextDb();
-    // Cleanup temp dir
-    if (testDbPath) {
-        const tempDir = testDbPath.replace("/context.db", "");
+    if (tempDir) {
         try {
             rmSync(tempDir, { recursive: true, force: true });
         } catch (e) {

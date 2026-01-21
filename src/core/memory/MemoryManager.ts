@@ -34,6 +34,10 @@ export interface MemoryManager {
 
 export class FileSystemMemoryManager implements MemoryManager {
   private getAgentDir(agentId: string): string {
+    // Validate agentId to prevent path traversal
+    if (!agentId || /[\/\\]|\.\./.test(agentId)) {
+      throw new Error(`Invalid agentId: ${agentId}`);
+    }
     const baseDir = getDataDir();
     const agentDir = join(baseDir, "agents", agentId, "memory");
     return agentDir;
@@ -70,14 +74,15 @@ export class FileSystemMemoryManager implements MemoryManager {
 
     let memory: DailyMemory = { date: today, sessions: [] };
 
-    if (existsSync(filePath)) {
-      try {
-        const content = await readFile(filePath, "utf-8");
-        const parsed = JSON.parse(content);
-        if (parsed.date === today) {
-            memory = parsed;
-        }
-      } catch (e) {
+    try {
+      const content = await readFile(filePath, "utf-8");
+      const parsed = JSON.parse(content);
+      if (parsed.date === today) {
+        memory = parsed;
+      }
+    } catch (e) {
+      // File doesn't exist or is corrupted, use default memory
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
         console.error(`[MemoryManager] Failed to parse daily memory, overwriting: ${filePath}`, e);
       }
     }

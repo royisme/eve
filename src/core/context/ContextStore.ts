@@ -129,9 +129,13 @@ export class ContextStore {
 
     if (results.length > 0) {
       const now = new Date().toISOString();
+      const foundIds = results.map(r => r.id);
       await this.db.update(contexts)
-        .set({ accessedAt: now })
-        .where(inArray(contexts.id, results.map(r => r.id)));
+        .set({ 
+          accessedAt: now,
+          accessCount: sql`${contexts.accessCount} + 1`
+        })
+        .where(inArray(contexts.id, foundIds));
     }
 
     // Sort by input ID order

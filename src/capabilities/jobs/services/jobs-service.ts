@@ -1,6 +1,6 @@
 import { db } from "../../../db";
 import { jobs } from "../../../db/schema";
-import { eq, and, or, like, isNull, isNotNull, desc } from "drizzle-orm";
+import { eq, and, or, isNull, isNotNull, desc, sql } from "drizzle-orm";
 import { FirecrawlService } from "../../../services/firecrawl";
 import { LLMService } from "../../../services/llm";
 import { ConfigManager } from "../../../core/config";
@@ -77,10 +77,11 @@ export async function searchJobs(params: JobSearchParams): Promise<JobSearchResu
 
   if (query) {
     const q = escapeSearchPattern(query.toLowerCase());
+    // Use raw SQL with ESCAPE clause for proper escaping
     conditions.push(
       or(
-        like(jobs.company, `%${q}%`),
-        like(jobs.title, `%${q}%`)
+        sql`${jobs.company} LIKE ${`%${q}%`} ESCAPE '\\'`,
+        sql`${jobs.title} LIKE ${`%${q}%`} ESCAPE '\\'`
       )
     );
   }
