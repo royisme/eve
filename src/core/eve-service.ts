@@ -13,6 +13,7 @@
 import { EveOrchestrator, type OrchestratorRequest, type OrchestratorResponse } from "./orchestrator";
 import { ConfigReader } from "./config-reader";
 import { initializeCapabilities } from "./agent";
+import { ensureDefaultAgents } from "./default-agents";
 
 export class EveService {
   private orchestrator: EveOrchestrator | null = null;
@@ -21,13 +22,10 @@ export class EveService {
   async init(): Promise<boolean> {
     if (this.initialized) return true;
 
-    // 1. Load config (ensures providers/models are available)
     ConfigReader.load();
-
-    // 2. Initialize capabilities (so tools are available for agents)
+    ensureDefaultAgents();
     await initializeCapabilities();
 
-    // 3. Create and initialize orchestrator
     this.orchestrator = new EveOrchestrator();
     this.orchestrator.init();
 
