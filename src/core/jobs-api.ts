@@ -21,6 +21,15 @@ const LEGACY_STATUS_MAP: Record<typeof VALID_STATUSES[number], string[]> = {
   skipped: ["Skipped"],
 };
 
+const ALL_VALID_STATUS_VALUES = new Set([
+  ...VALID_STATUSES,
+  ...Object.values(LEGACY_STATUS_MAP).flat(),
+].map((s) => s.toLowerCase()));
+
+function isValidRawStatus(status: string): boolean {
+  return ALL_VALID_STATUS_VALUES.has(status.toLowerCase());
+}
+
 function normalizeStatus(status?: string | null): typeof VALID_STATUSES[number] {
   if (!status) return "inbox";
   const lower = status.toLowerCase();
@@ -69,7 +78,7 @@ function toJobResponse(job: typeof jobs.$inferSelect) {
 
 function toJobAnalysisResponse(result: AnalysisResult, jobId: number, resumeId: number) {
   return {
-    id: result.analysisId ?? 0,
+    id: result.analysisId ?? null,
     jobId,
     resumeId,
     overallScore: result.overallScore,
@@ -99,11 +108,11 @@ export async function getJobs(params: {
   let conditions = [];
   
   if (status && status !== "all") {
+    if (!isValidRawStatus(status)) {
+      throw new Error(`Invalid status: ${status}. Valid values: ${Array.from(ALL_VALID_STATUS_VALUES).join(", ")}`);
+    }
     const normalized = normalizeStatus(status);
     const variants = getStatusVariants(normalized);
-    if (!VALID_STATUSES.includes(normalized)) {
-      throw new Error(`Invalid status: ${status}. Valid values: ${VALID_STATUSES.join(", ")}`);
-    }
     if (variants.length === 1) {
       conditions.push(eq(jobs.status, variants[0]));
     } else {
@@ -182,10 +191,12 @@ export async function updateJob(id: number, data: Partial<{
     throw new Error("Job not found");
   }
 
-  const nextStatus = data.status ? normalizeStatus(data.status) : null;
-  if (data.status && nextStatus && !VALID_STATUSES.includes(nextStatus)) {
-    throw new Error(`Invalid status: ${data.status}. Valid values: ${VALID_STATUSES.join(", ")}`);
+  // Validate raw input before normalization to reject invalid statuses
+  if (data.status !== undefined && !isValidRawStatus(data.status)) {
+    throw new Error(`Invalid status: ${data.status}. Valid values: ${Array.from(ALL_VALID_STATUS_VALUES).join(", ")}`);
   }
+
+  const nextStatus = data.status ? normalizeStatus(data.status) : null;
 
   const updateData: Record<string, unknown> = {};
   if (nextStatus) updateData.status = nextStatus;

@@ -7,7 +7,7 @@ mock.module("../../../src/services/llm", () => {
     return {
         LLMService: class {
             async extractJobDetails() {
-                return { company: "Mock AI Company", title: "Mock AI Role", status: "New" };
+                return { company: "Mock AI Company", title: "Mock AI Role", status: "inbox" };
             }
         }
     };

@@ -1,6 +1,6 @@
 import { db } from "../../../db";
 import { jobs } from "../../../db/schema";
-import { eq, and, isNull, isNotNull, desc } from "drizzle-orm";
+import { eq, and, or, like, isNull, isNotNull, desc } from "drizzle-orm";
 import { FirecrawlService } from "../../../services/firecrawl";
 import { LLMService } from "../../../services/llm";
 import { ConfigManager } from "../../../core/config";
@@ -46,7 +46,30 @@ function normalizeStatus(status?: string | null): typeof VALID_STATUSES[number] 
 export async function searchJobs(params: JobSearchParams): Promise<JobSearchResult[]> {
   const { query, status, limit = 20 } = params;
 
-  let results = await db
+  const conditions: any[] = [];
+
+  if (status) {
+    const normalized = normalizeStatus(status);
+    const variants = LEGACY_STATUS_MAP[normalized] ?? [];
+    const allStatuses = [normalized, ...variants];
+    if (allStatuses.length === 1) {
+      conditions.push(eq(jobs.status, allStatuses[0]));
+    } else {
+      conditions.push(or(...allStatuses.map((s) => eq(jobs.status, s))));
+    }
+  }
+
+  if (query) {
+    const q = query.toLowerCase();
+    conditions.push(
+      or(
+        like(jobs.company, `%${q}%`),
+        like(jobs.title, `%${q}%`)
+      )
+    );
+  }
+
+  let baseQuery = db
     .select({
       id: jobs.id,
       company: jobs.company,
@@ -57,22 +80,13 @@ export async function searchJobs(params: JobSearchParams): Promise<JobSearchResu
       receivedAt: jobs.receivedAt,
     })
     .from(jobs)
-    .orderBy(desc(jobs.receivedAt))
-    .limit(limit);
+    .orderBy(desc(jobs.receivedAt));
 
-  if (status) {
-    const normalized = normalizeStatus(status);
-    results = results.filter((j) => normalizeStatus(j.status) === normalized);
-  }
+  const finalQuery = conditions.length > 0
+    ? baseQuery.where(and(...conditions)).limit(limit)
+    : baseQuery.limit(limit);
 
-  if (query) {
-    const q = query.toLowerCase();
-    results = results.filter(
-      (j) =>
-        j.company?.toLowerCase().includes(q) ||
-        j.title?.toLowerCase().includes(q)
-    );
-  }
+  const results = await finalQuery;
 
   return results.map((job) => ({
     ...job,

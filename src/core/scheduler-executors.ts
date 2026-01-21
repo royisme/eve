@@ -71,8 +71,16 @@ Scheduler.registerExecutor('daily_briefing', async (_job, _sessionId) => {
 });
 
 Scheduler.registerExecutor('jobs_enrich', async (job, _sessionId) => {
-  const params = job.payloadParams ? JSON.parse(job.payloadParams) : {};
-  const limit = typeof params.limit === 'number' ? params.limit : undefined;
+  let params: any = {};
+  if (job.payloadParams) {
+    try {
+      params = JSON.parse(job.payloadParams);
+    } catch {
+      params = {};
+    }
+  }
+  const parsedLimit = params.limit !== undefined ? Number(params.limit) : undefined;
+  const limit = Number.isFinite(parsedLimit ?? NaN) && (parsedLimit ?? 0) >= 0 ? parsedLimit : undefined;
 
   const result = await enrichPendingJobs(limit);
   return {
@@ -87,8 +95,16 @@ Scheduler.registerExecutor('jobs_enrich', async (job, _sessionId) => {
 });
 
 Scheduler.registerExecutor('jobs_analyze', async (job, _sessionId) => {
-  const params = job.payloadParams ? JSON.parse(job.payloadParams) : {};
-  const limit = typeof params.limit === 'number' ? params.limit : undefined;
+  let params: any = {};
+  if (job.payloadParams) {
+    try {
+      params = JSON.parse(job.payloadParams);
+    } catch {
+      params = {};
+    }
+  }
+  const parsedLimit = params.limit !== undefined ? Number(params.limit) : undefined;
+  const limit = Number.isFinite(parsedLimit ?? NaN) && (parsedLimit ?? 0) >= 0 ? parsedLimit : undefined;
 
   const result = await analyzePendingJobs(limit);
   return {
