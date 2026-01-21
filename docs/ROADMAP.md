@@ -1,6 +1,6 @@
 # Eve Roadmap
 
-> **Last Updated**: 2026-01-20
+> **Last Updated**: 2026-01-21
 > **Current Version**: 0.3.0
 
 ## Vision
@@ -17,10 +17,13 @@ Eve aims to be a **Jarvis-like personal AI assistant** - a local-first, privacy-
 Phase 1: Foundation (✅ Complete)
     │
     ▼
-Phase 2: Job Hunting Copilot (🔄 Current)
+Phase 2: Job Hunting Copilot (✅ Complete)
     │
     ▼
-Phase 3: Auto-Apply Engine (📋 Next)
+Phase 3: State Layer (✅ Complete - PR #13)
+    │
+    ▼
+Phase 6: Eve as Orchestrator (📋 Next - Task Decomposition)
     │
     ▼
 Phase 4: Multi-Domain Expansion (🔮 Future)
@@ -43,9 +46,14 @@ Phase 4: Multi-Domain Expansion (🔮 Future)
 
 ---
 
-## Phase 2: Job Hunting Copilot 🔄
+---
+
+## Phase 2: Job Hunting Copilot ✅
 
 **Goal**: Complete end-to-end job hunting workflow
+
+> ✅ Phase 2 core complete (PR #12)
+> ⚠️ PDF Generation remaining (P1)
 
 ### 2.1 Core Features ✅
 
@@ -81,67 +89,42 @@ Phase 4: Multi-Domain Expansion (🔮 Future)
 
 ---
 
-## Phase 3: Auto-Apply Engine 📋
+**Goal**: Break complex user requests into subtasks using Context and Memory
 
-**Goal**: Semi-automated job application workflow
+### 6.1 Task Decomposition
 
-### 3.1 Universal Application Protocol (UAP)
+| Component | Description |
+|-----------|-------------|
+| Orchestrator Agent | Routes requests to specialized agents |
+| Task Planner | Breaks down "Research company and tailor resume" |
+| Context Chain | Passes context between subtasks |
+| Result Aggregator | Merges results from multiple steps |
 
-Standard schema for any job application:
-
-```typescript
-interface UAP {
-  personalInfo: { name, email, phone, ... }
-  resume: { content, format }
-  coverLetter: { content }
-  questions: { question, answer }[]
-  attachments: { type, content }[]
-}
-```
-
-### 3.2 ATS Adapters
-
-| Platform | Priority | Complexity |
-|----------|----------|------------|
-| LinkedIn Easy Apply | P0 | Medium |
-| Greenhouse | P1 | Medium |
-| Lever | P1 | Low |
-| Workday | P2 | High |
-| Custom forms | P3 | Variable |
-
-### 3.3 Workflow
+### 6.2 Workflow Example
 
 ```
-1. User selects job → "Apply" button
-           │
-           ▼
-2. Eve detects ATS type
-           │
-           ▼
-3. Eve maps UAP to ATS fields
-           │
-           ▼
-4. Wall-E fills form automatically
-           │
-           ▼
-5. Human review checkpoint
-           │
-           ▼
-6. Wall-E submits application
-           │
-           ▼
-7. Status updated to "applied"
+User: "Research Tesla and tailor my resume for the SWE role"
+
+1. Eve breaks into subtasks:
+   - jobs:enrich (fetch JD)
+   - jobs:analyze (score fit)
+   - resume:tailor (customize)
+   - memory:append (save insights)
+
+2. Execute subtasks in parallel/sequence
+
+3. Aggregate results and present to user
 ```
 
-### 3.4 Features
+### 6.3 Key Components
 
-| Feature | Description |
-|---------|-------------|
-| Smart Form Filling | Auto-fill standard fields |
-| Question Bank | Learn from previous answers |
-| Cover Letter Generation | LLM-powered, job-specific |
-| Attachment Management | Resume + portfolio handling |
-| Application Tracking | Auto-update status on submit |
+| Component | Priority | Notes |
+|-----------|----------|-------|
+| Orchestrator | P0 | Router + Task Planner |
+| Task Registry | P0 | Define available tasks |
+| Context Pass-through | P0 | Pass context IDs between tasks |
+| Result Aggregation | P1 | Merge multiple tool results |
+| Human-in-the-loop | P1 | Checkpoint for critical steps |
 
 ---
 
@@ -228,6 +211,7 @@ See `AGENTS.md` for development guidelines. Key principles:
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-01-21 | 0.3.1 | Phase 3 State Layer complete (PR #13) |
 | 2026-01-20 | 0.3.0 | Complete Phase 2 core, Wall-E integration |
 | 2026-01-19 | 0.2.0 | Capability framework, Resume tailoring |
 | 2026-01-15 | 0.1.0 | Initial Jobs + Email capabilities |
