@@ -3,6 +3,8 @@ import { join } from "path";
 import { Value } from "@sinclair/typebox/value";
 import { EveConfigSchema, type EveConfig } from "./config-schema";
 import { getDataDir } from "./data-dir";
+import { ProviderRegistry } from "./provider-registry";
+import { ModelResolver } from "./model-resolver";
 
 const CONFIG_FILE = "eve.json";
 
@@ -54,6 +56,8 @@ const DEFAULT_CONFIG: EveConfig = {
 
 export class ConfigReader {
   private static config: EveConfig | null = null;
+  private static providerRegistry: ProviderRegistry | null = null;
+  private static modelResolver: ModelResolver | null = null;
 
   static load(): EveConfig {
     if (this.config) {
@@ -99,12 +103,16 @@ export class ConfigReader {
     }
 
     this.config = config;
+    this.providerRegistry = new ProviderRegistry(config);
+    this.modelResolver = new ModelResolver(config, this.providerRegistry);
     console.log(`✅ Loaded config from ${configPath}`);
     return this.config;
   }
 
   static reload(): EveConfig {
     this.config = null;
+    this.providerRegistry = null;
+    this.modelResolver = null;
     return this.load();
   }
 
@@ -113,6 +121,20 @@ export class ConfigReader {
       return this.load();
     }
     return this.config;
+  }
+
+  static getProviderRegistry(): ProviderRegistry {
+    if (!this.providerRegistry) {
+      this.load();
+    }
+    return this.providerRegistry!;
+  }
+
+  static getModelResolver(): ModelResolver {
+    if (!this.modelResolver) {
+      this.load();
+    }
+    return this.modelResolver!;
   }
 
   private static createDefaultConfig(configPath: string): void {
