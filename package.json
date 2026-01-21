@@ -33,11 +33,12 @@
     "query": "bun run src/index.ts query",
     "clean": "bun run src/index.ts clean",
     "start": "bun run src/index.ts",
-    "build": "rm -rf dist && tsc -p tsconfig.build.json && mkdir -p dist/drizzle && cp -R drizzle/* dist/drizzle/",
+    "build": "bun run scripts/generate-schema.ts && rm -rf dist && tsc -p tsconfig.build.json && mkdir -p dist/drizzle && cp -R drizzle/* dist/drizzle/ && cp schema.json dist/",
     "start:dist": "bun dist/index.js",
     "check": "oxlint . && tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "prepare": "husky"
+    "prepare": "husky",
+    "generate-schema": "bun run scripts/generate-schema.ts"
   },
   "lint-staged": {
     "*.ts": "oxlint"
