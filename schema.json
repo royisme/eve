@@ -12,6 +12,7 @@
       "type": "object",
       "patternProperties": {
         "^(.*)$": {
+          "description": "Provider configuration - must have at least api_key or base_url",
           "type": "object",
           "properties": {
             "api_key": {
@@ -29,7 +30,8 @@
             },
             "timeout_ms": {
               "default": 30000,
-              "type": "number"
+              "minimum": 0,
+              "type": "integer"
             },
             "rate_limit": {
               "type": "object",
@@ -39,10 +41,12 @@
               ],
               "properties": {
                 "requests_per_minute": {
-                  "type": "number"
+                  "minimum": 0,
+                  "type": "integer"
                 },
                 "tokens_per_minute": {
-                  "type": "number"
+                  "minimum": 0,
+                  "type": "integer"
                 }
               }
             }
@@ -245,19 +249,23 @@
           "properties": {
             "max_retries": {
               "default": 3,
-              "type": "number"
+              "minimum": 0,
+              "type": "integer"
             },
             "retry_delay_ms": {
               "default": 1000,
-              "type": "number"
+              "minimum": 0,
+              "type": "integer"
             },
             "backoff_multiplier": {
               "default": 2,
+              "minimum": 0,
               "type": "number"
             },
             "max_delay_ms": {
               "default": 30000,
-              "type": "number"
+              "minimum": 0,
+              "type": "integer"
             }
           }
         },
@@ -270,11 +278,13 @@
           "properties": {
             "short_term_retention_days": {
               "default": 7,
-              "type": "number"
+              "minimum": 0,
+              "type": "integer"
             },
             "long_term_max_size_kb": {
               "default": 512,
-              "type": "number"
+              "minimum": 0,
+              "type": "integer"
             }
           }
         },
@@ -287,7 +297,8 @@
           "properties": {
             "default_expiry_hours": {
               "default": 168,
-              "type": "number"
+              "minimum": 0,
+              "type": "integer"
             },
             "compression": {
               "default": "json",

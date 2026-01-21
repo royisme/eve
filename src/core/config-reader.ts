@@ -88,7 +88,17 @@ export class ConfigReader {
       process.exit(1);
     }
 
-    this.config = rawConfig as EveConfig;
+    const config = rawConfig as EveConfig;
+
+    for (const [providerName, providerConfig] of Object.entries(config.providers)) {
+      if (!providerConfig.api_key && !providerConfig.base_url) {
+        console.error(`❌ Invalid provider config in ${configPath}:`);
+        console.error(`  - providers.${providerName}: must have at least 'api_key' or 'base_url'`);
+        process.exit(1);
+      }
+    }
+
+    this.config = config;
     console.log(`✅ Loaded config from ${configPath}`);
     return this.config;
   }

@@ -6,17 +6,22 @@ import { Type, type Static } from "@sinclair/typebox";
  */
 
 // Provider configuration
-const ProviderConfigSchema = Type.Object({
-  api_key: Type.Optional(Type.String()),
-  base_url: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-  timeout_ms: Type.Optional(Type.Number({ default: 30000 })),
-  rate_limit: Type.Optional(
-    Type.Object({
-      requests_per_minute: Type.Number(),
-      tokens_per_minute: Type.Number(),
-    })
-  ),
-});
+const ProviderConfigSchema = Type.Object(
+  {
+    api_key: Type.Optional(Type.String()),
+    base_url: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    timeout_ms: Type.Optional(Type.Integer({ default: 30000, minimum: 0 })),
+    rate_limit: Type.Optional(
+      Type.Object({
+        requests_per_minute: Type.Integer({ minimum: 0 }),
+        tokens_per_minute: Type.Integer({ minimum: 0 }),
+      })
+    ),
+  },
+  {
+    description: "Provider configuration - must have at least api_key or base_url",
+  }
+);
 
 // Model alias definition
 const ModelAliasSchema = Type.Object({
@@ -44,17 +49,17 @@ const EveConfigBlockSchema = Type.Object({
 // Defaults block
 const DefaultsSchema = Type.Object({
   retry: Type.Object({
-    max_retries: Type.Number({ default: 3 }),
-    retry_delay_ms: Type.Number({ default: 1000 }),
-    backoff_multiplier: Type.Number({ default: 2 }),
-    max_delay_ms: Type.Number({ default: 30000 }),
+    max_retries: Type.Integer({ default: 3, minimum: 0 }),
+    retry_delay_ms: Type.Integer({ default: 1000, minimum: 0 }),
+    backoff_multiplier: Type.Number({ default: 2, minimum: 0 }),
+    max_delay_ms: Type.Integer({ default: 30000, minimum: 0 }),
   }),
   memory: Type.Object({
-    short_term_retention_days: Type.Number({ default: 7 }),
-    long_term_max_size_kb: Type.Number({ default: 512 }),
+    short_term_retention_days: Type.Integer({ default: 7, minimum: 0 }),
+    long_term_max_size_kb: Type.Integer({ default: 512, minimum: 0 }),
   }),
   context: Type.Object({
-    default_expiry_hours: Type.Number({ default: 168 }),
+    default_expiry_hours: Type.Integer({ default: 168, minimum: 0 }),
     compression: Type.Union([
       Type.Literal("none"),
       Type.Literal("json"),
