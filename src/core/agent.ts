@@ -5,6 +5,8 @@ import type { CapabilityContext } from "../capabilities/types";
 import { ConfigManager } from "./config";
 import { ConfigReader } from "./config-reader";
 import { db } from "../db";
+import { getContextStore } from "./context";
+import { getMemoryManager } from "./memory";
 
 export interface EveAgentConfig {
   systemPrompt?: string;
@@ -58,6 +60,8 @@ export async function initializeCapabilities(): Promise<void> {
   const ctx: CapabilityContext = {
     db,
     config: ConfigManager,
+    memory: getMemoryManager(),
+    context: getContextStore(),
   };
 
   for (const capability of await getCapabilities()) {
@@ -66,6 +70,16 @@ export async function initializeCapabilities(): Promise<void> {
       console.log(`[Eve] Capability initialized: ${capability.name}`);
     }
   }
+
+  // Cleanup tasks
+  try {
+    const count = await ctx.context.deleteExpired();
+    if (count > 0) console.log(`[Eve] Cleaned up ${count} expired contexts`);
+  } catch (e) {
+    console.error("[Eve] Failed to clean up contexts", e);
+  }
+
+  // TODO: Daily memory cleanup requires iterating known agent IDs (deferred for MVP)
 }
 
 export async function createEveAgent(config: EveAgentConfig = {}): Promise<Agent> {
