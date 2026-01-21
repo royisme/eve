@@ -1,0 +1,318 @@
+{
+  "type": "object",
+  "required": [
+    "providers",
+    "models",
+    "agents",
+    "routing",
+    "eve"
+  ],
+  "properties": {
+    "providers": {
+      "type": "object",
+      "patternProperties": {
+        "^(.*)$": {
+          "type": "object",
+          "properties": {
+            "api_key": {
+              "type": "string"
+            },
+            "base_url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "timeout_ms": {
+              "default": 30000,
+              "type": "number"
+            },
+            "rate_limit": {
+              "type": "object",
+              "required": [
+                "requests_per_minute",
+                "tokens_per_minute"
+              ],
+              "properties": {
+                "requests_per_minute": {
+                  "type": "number"
+                },
+                "tokens_per_minute": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "models": {
+      "type": "object",
+      "patternProperties": {
+        "^(.*)$": {
+          "type": "object",
+          "required": [
+            "provider",
+            "model"
+          ],
+          "properties": {
+            "provider": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "model_fallback_chain": {
+      "type": "object",
+      "patternProperties": {
+        "^(.*)$": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "agents": {
+      "type": "object",
+      "required": [
+        "enabled",
+        "auto_discover"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "auto_discover": {
+          "default": true,
+          "type": "boolean"
+        }
+      }
+    },
+    "routing": {
+      "type": "object",
+      "required": [
+        "tasks"
+      ],
+      "properties": {
+        "tasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "pattern",
+              "agent",
+              "priority"
+            ],
+            "properties": {
+              "pattern": {
+                "type": "string"
+              },
+              "agent": {
+                "type": "string"
+              },
+              "priority": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "pattern",
+              "agent",
+              "priority"
+            ],
+            "properties": {
+              "pattern": {
+                "type": "string"
+              },
+              "agent": {
+                "type": "string"
+              },
+              "priority": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "pattern",
+              "agent",
+              "priority"
+            ],
+            "properties": {
+              "pattern": {
+                "type": "string"
+              },
+              "agent": {
+                "type": "string"
+              },
+              "priority": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      }
+    },
+    "eve": {
+      "type": "object",
+      "required": [
+        "model",
+        "role",
+        "fallback"
+      ],
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "role": {
+          "default": "orchestrator",
+          "anyOf": [
+            {
+              "const": "orchestrator",
+              "type": "string"
+            },
+            {
+              "const": "direct",
+              "type": "string"
+            }
+          ]
+        },
+        "fallback": {
+          "default": true,
+          "type": "boolean"
+        },
+        "system_prompt": {
+          "type": "string"
+        }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "required": [
+        "enabled",
+        "auto_discover"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "auto_discover": {
+          "default": true,
+          "type": "boolean"
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "required": [
+        "retry",
+        "memory",
+        "context"
+      ],
+      "properties": {
+        "retry": {
+          "type": "object",
+          "required": [
+            "max_retries",
+            "retry_delay_ms",
+            "backoff_multiplier",
+            "max_delay_ms"
+          ],
+          "properties": {
+            "max_retries": {
+              "default": 3,
+              "type": "number"
+            },
+            "retry_delay_ms": {
+              "default": 1000,
+              "type": "number"
+            },
+            "backoff_multiplier": {
+              "default": 2,
+              "type": "number"
+            },
+            "max_delay_ms": {
+              "default": 30000,
+              "type": "number"
+            }
+          }
+        },
+        "memory": {
+          "type": "object",
+          "required": [
+            "short_term_retention_days",
+            "long_term_max_size_kb"
+          ],
+          "properties": {
+            "short_term_retention_days": {
+              "default": 7,
+              "type": "number"
+            },
+            "long_term_max_size_kb": {
+              "default": 512,
+              "type": "number"
+            }
+          }
+        },
+        "context": {
+          "type": "object",
+          "required": [
+            "default_expiry_hours",
+            "compression"
+          ],
+          "properties": {
+            "default_expiry_hours": {
+              "default": 168,
+              "type": "number"
+            },
+            "compression": {
+              "default": "json",
+              "anyOf": [
+                {
+                  "const": "none",
+                  "type": "string"
+                },
+                {
+                  "const": "json",
+                  "type": "string"
+                },
+                {
+                  "const": "selective",
+                  "type": "string"
+                },
+                {
+                  "const": "summarize",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
