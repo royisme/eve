@@ -1,6 +1,6 @@
 import { db } from "../../../db";
 import { jobs, resumes } from "../../../db/schema";
-import { SKILLS, SkillDefinition } from "../data/skills";
+import { SKILLS } from "../data/skills";
 import { eq, gte, isNotNull, desc, and } from "drizzle-orm";
 
 export interface SkillMatch {

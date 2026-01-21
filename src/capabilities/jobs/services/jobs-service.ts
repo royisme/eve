@@ -1,6 +1,6 @@
 import { db } from "../../../db";
 import { jobs } from "../../../db/schema";
-import { eq, and, isNull, isNotNull, desc, like } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, desc } from "drizzle-orm";
 import { FirecrawlService } from "../../../services/firecrawl";
 import { LLMService } from "../../../services/llm";
 import { ConfigManager } from "../../../core/config";

@@ -1,6 +1,6 @@
 import { db } from "../db";
-import { resumes, tailoredResumes } from "../db/schema";
-import { eq, desc } from "drizzle-orm";
+import { tailoredResumes } from "../db/schema";
+import { eq } from "drizzle-orm";
 import * as resumeService from "../capabilities/resume/services/resume-service";
 import * as fs from "fs/promises";
 import * as path from "path";

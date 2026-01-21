@@ -1,4 +1,4 @@
-import { Container, Text, Input, TUI, Box, type Component } from "@mariozechner/pi-tui";
+import { Container, Text, Input, TUI, Box } from "@mariozechner/pi-tui";
 import { getEveCore, isInitialized } from "../../core/bootstrap";
 
 export class ChatTab extends Container {

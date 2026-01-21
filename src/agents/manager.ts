@@ -1,6 +1,5 @@
 import { ConfigManager } from "../core/config";
 import { Agent } from "@mariozechner/pi-agent-core";
-import { getModel } from "@mariozechner/pi-ai";
 import { createEveAgent, initializeCapabilities } from "../core/agent";
 
 export interface AgentConfig {

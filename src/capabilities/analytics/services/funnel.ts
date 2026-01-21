@@ -1,6 +1,6 @@
 import { db } from "../../../db";
 import { jobs, jobStatusHistory } from "../../../db/schema";
-import { eq, and, gte, desc, or, isNull } from "drizzle-orm";
+import { eq, and, gte, desc } from "drizzle-orm";
 
 export interface FunnelStage {
   stage: string;
