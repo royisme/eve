@@ -1,6 +1,5 @@
 import { Container, Text, TUI } from "@mariozechner/pi-tui";
 import { getFullAuthStatus, type GogAuthStatus } from "../../capabilities/email/services/email-service";
-import { TaskRunner } from "../../core/task-runner";
 import { emailSyncTool } from "../../capabilities/email/tools/sync";
 
 export class EmailTab extends Container {
@@ -66,10 +65,19 @@ export class EmailTab extends Container {
     this.tui.requestRender();
 
     try {
-      await TaskRunner.runTool(emailSyncTool, {}, {
-        name: "Email Sync",
-        onProgress: () => {},
-      });
+      const result = await emailSyncTool.execute(
+        `email_sync_${Date.now()}`,
+        {},
+        undefined,
+        (update) => {
+          const textContent = update.content?.find((c) => c.type === "text");
+          if (textContent && textContent.type === "text" && "text" in textContent) {
+            this.currentStatusText += `\n${textContent.text}`;
+            this.statusText.setText(this.currentStatusText);
+            this.tui.requestRender();
+          }
+        }
+      );
       await this.refreshStatus();
     } catch (e) {
       this.currentStatusText += `\n\n❌ Sync failed: ${(e as Error).message}`;

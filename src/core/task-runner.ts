@@ -1,248 +1,228 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { PlannedTask, TaskExecutionResult, TaskPlan } from "./types/planning";
+import type { OrchestratorTask } from "./orchestrator";
+import type { RoutingResult } from "./routing-engine";
 
-export type TaskStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+/**
+ * Plan Task Runner
+ *
+ * Executes task plans with dependency-aware scheduling.
+ * Supports topological ordering and parallel execution of independent tasks.
+ */
+export class PlanTaskRunner {
+  private executor: TaskExecutor;
 
-export interface TaskProgress {
-  taskId: string;
-  status: TaskStatus;
-  progress?: number;
-  message?: string;
-  result?: unknown;
-  error?: Error;
-}
-
-export type TaskProgressCallback = (progress: TaskProgress) => void;
-
-interface Task {
-  id: string;
-  name: string;
-  status: TaskStatus;
-  progress: number;
-  message: string;
-  abortController: AbortController;
-  startTime: number;
-  endTime?: number;
-  result?: unknown;
-  error?: Error;
-}
-
-type TaskListener = (tasks: Task[]) => void;
-
-class TaskRunnerImpl {
-  private tasks: Map<string, Task> = new Map();
-  private listeners: Set<TaskListener> = new Set();
-  private taskCounter = 0;
-
-  subscribe(listener: TaskListener): () => void {
-    this.listeners.add(listener);
-    listener(this.getAllTasks());
-    return () => this.listeners.delete(listener);
+  constructor(options: PlanTaskRunnerOptions = {}) {
+    this.executor = options.executor ?? new DefaultTaskExecutor();
   }
 
-  private notify(): void {
-    const tasks = this.getAllTasks();
-    for (const listener of this.listeners) {
-      listener(tasks);
+  /**
+   * Execute a task plan and return results
+   */
+  async run(plan: TaskPlan, inputContextIds?: string[]): Promise<TaskExecutionResult[]> {
+    if (plan.tasks.length === 0) {
+      return [];
     }
+
+    if (plan.executionMode === "sequential") {
+      return this.runSequential(plan, inputContextIds);
+    }
+
+    return this.runDependencyAware(plan, inputContextIds);
   }
 
-  getAllTasks(): Task[] {
-    return Array.from(this.tasks.values());
+  private async runSequential(
+    plan: TaskPlan,
+    inputContextIds?: string[]
+  ): Promise<TaskExecutionResult[]> {
+    const results: TaskExecutionResult[] = [];
+    const contextIds = new Map<string, string[]>();
+
+    if (inputContextIds && inputContextIds.length > 0) {
+      contextIds.set("input", [...inputContextIds]);
+    }
+
+    for (const task of plan.tasks) {
+      const inputIds = this.getInputContextIds(task, contextIds);
+      const result = await this.executeTask(task, inputIds);
+      results.push(result);
+
+      if (result.outputContextId) {
+        contextIds.set(task.outputContextType, [result.outputContextId]);
+      }
+    }
+
+    return results;
   }
 
-  getTask(taskId: string): Task | undefined {
-    return this.tasks.get(taskId);
-  }
+  private async runDependencyAware(
+    plan: TaskPlan,
+    inputContextIds?: string[]
+  ): Promise<TaskExecutionResult[]> {
+    const results: TaskExecutionResult[] = [];
+    const contextIds = new Map<string, string[]>();
+    const taskResults = new Map<string, TaskExecutionResult>();
+    const readyTasks = new Set<string>();
+    const pendingDependencies = new Map<string, Set<string>>();
+    const taskMap = new Map<string, PlannedTask>();
 
-  getRunningTasks(): Task[] {
-    return this.getAllTasks().filter(t => t.status === "running");
-  }
+    if (inputContextIds && inputContextIds.length > 0) {
+      contextIds.set("input", [...inputContextIds]);
+    }
 
-  async runTool<T>(
-    tool: AgentTool<any, any>,
-    params: Record<string, unknown>,
-    options?: { name?: string; onProgress?: TaskProgressCallback }
-  ): Promise<T> {
-    const taskId = `task_${++this.taskCounter}_${Date.now()}`;
-    const taskName = options?.name || tool.name;
-    const abortController = new AbortController();
+    for (const task of plan.tasks) {
+      taskMap.set(task.id, task);
+      pendingDependencies.set(task.id, new Set(task.dependsOn));
 
-    const task: Task = {
-      id: taskId,
-      name: taskName,
-      status: "pending",
-      progress: 0,
-      message: "Starting...",
-      abortController,
-      startTime: Date.now(),
-    };
+      if (task.dependsOn.length === 0) {
+        readyTasks.add(task.id);
+      }
+    }
 
-    this.tasks.set(taskId, task);
-    this.updateTask(taskId, { status: "running" });
+    // Check for circular dependencies before starting
+    const totalTasks = plan.tasks.length;
+    if (readyTasks.size === 0 && totalTasks > 0) {
+      const remainingTaskIds = Array.from(taskMap.keys());
+      throw new Error(
+        `Circular dependency detected. Unable to schedule tasks: ${remainingTaskIds.join(", ")}`
+      );
+    }
 
-    try {
-      const result = await tool.execute(
-        taskId,
-        params,
-        abortController.signal,
-        (update) => {
-          const message = update.content?.[0]?.type === "text" 
-            ? (update.content[0] as { text: string }).text 
-            : "Processing...";
-          this.updateTask(taskId, { message });
-          options?.onProgress?.({
-            taskId,
-            status: "running",
-            message,
-          });
-        }
+    while (readyTasks.size > 0) {
+      const parallelGroups = this.groupByParallelGroup(
+        Array.from(readyTasks).map((id) => taskMap.get(id)!)
       );
 
-      this.updateTask(taskId, {
-        status: "completed",
-        progress: 100,
-        message: "Done",
-        result,
-      });
+        for (const group of parallelGroups) {
+          const groupResults = await Promise.all(
+            group.map((task) => this.executeTask(task, this.getInputContextIds(task, contextIds)))
+          );
 
-      options?.onProgress?.({
-        taskId,
-        status: "completed",
-        result,
-      });
+          for (const result of groupResults) {
+            taskResults.set(result.taskId, result);
+            results.push(result);
 
-      return result as T;
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      const isCancelled = abortController.signal.aborted;
+            if (result.outputContextId) {
+              // Use the planned task's outputContextType as the key for downstream lookups
+              const task = taskMap.get(result.taskId);
+              if (task) {
+                contextIds.set(task.outputContextType, [result.outputContextId]);
+              }
+            }
+          }
 
-      this.updateTask(taskId, {
-        status: isCancelled ? "cancelled" : "failed",
-        message: isCancelled ? "Cancelled" : err.message,
-        error: err,
-      });
+        for (const task of group) {
+          readyTasks.delete(task.id);
 
-      options?.onProgress?.({
-        taskId,
-        status: isCancelled ? "cancelled" : "failed",
-        error: err,
-      });
+          for (const [, dependentTask] of taskMap) {
+            if (dependentTask.dependsOn.includes(task.id)) {
+              const deps = pendingDependencies.get(dependentTask.id)!;
+              deps.delete(task.id);
 
-      throw error;
+              if (deps.size === 0) {
+                readyTasks.add(dependentTask.id);
+              }
+            }
+          }
+        }
+      }
     }
+
+    return results;
   }
 
-  async run<T>(
-    name: string,
-    fn: (signal: AbortSignal, updateProgress: (msg: string, pct?: number) => void) => Promise<T>,
-    options?: { onProgress?: TaskProgressCallback }
-  ): Promise<T> {
-    const taskId = `task_${++this.taskCounter}_${Date.now()}`;
-    const abortController = new AbortController();
+  private groupByParallelGroup(tasks: PlannedTask[]): PlannedTask[][] {
+    const groups = new Map<string, PlannedTask[]>();
+    const noGroup: PlannedTask[] = [];
 
-    const task: Task = {
-      id: taskId,
-      name,
-      status: "pending",
-      progress: 0,
-      message: "Starting...",
-      abortController,
-      startTime: Date.now(),
-    };
+    for (const task of tasks) {
+      if (task.parallelGroup === null) {
+        noGroup.push(task);
+      } else {
+        if (!groups.has(task.parallelGroup)) {
+          groups.set(task.parallelGroup, []);
+        }
+        groups.get(task.parallelGroup)!.push(task);
+      }
+    }
 
-    this.tasks.set(taskId, task);
-    this.updateTask(taskId, { status: "running" });
+    return [...groups.values(), ...(noGroup.length > 0 ? [noGroup] : [])];
+  }
 
-    const updateProgress = (message: string, progress?: number) => {
-      this.updateTask(taskId, { message, progress: progress ?? task.progress });
-      options?.onProgress?.({
-        taskId,
-        status: "running",
-        message,
-        progress,
-      });
-    };
+  private getInputContextIds(task: PlannedTask, contextIds: Map<string, string[]>): string[] {
+    const inputIds: string[] = [];
+
+    for (const type of task.inputContextTypes) {
+      const ids = contextIds.get(type);
+      if (ids) {
+        inputIds.push(...ids);
+      }
+    }
+
+    return inputIds;
+  }
+
+  private async executeTask(
+    task: PlannedTask,
+    inputContextIds: string[]
+  ): Promise<TaskExecutionResult> {
+    const startTime = Date.now();
 
     try {
-      const result = await fn(abortController.signal, updateProgress);
-
-      this.updateTask(taskId, {
-        status: "completed",
-        progress: 100,
-        message: "Done",
-        result,
+      const execOutput = await this.executor.execute({
+        taskId: task.id,
+        tag: task.tag,
+        payload: task.payload,
+        contextIds: inputContextIds,
       });
 
-      options?.onProgress?.({
-        taskId,
-        status: "completed",
-        result,
-      });
-
-      return result;
+      return {
+        taskId: task.id,
+        tag: task.tag,
+        status: "success",
+        output: execOutput.output,
+        outputContextId: execOutput.outputContextId,
+        durationMs: Date.now() - startTime,
+        executedAt: new Date().toISOString(),
+      };
     } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error));
-      const isCancelled = abortController.signal.aborted;
-
-      this.updateTask(taskId, {
-        status: isCancelled ? "cancelled" : "failed",
-        message: isCancelled ? "Cancelled" : err.message,
-        error: err,
-      });
-
-      options?.onProgress?.({
-        taskId,
-        status: isCancelled ? "cancelled" : "failed",
-        error: err,
-      });
-
-      throw error;
+      return {
+        taskId: task.id,
+        tag: task.tag,
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error),
+        durationMs: Date.now() - startTime,
+        executedAt: new Date().toISOString(),
+      };
     }
-  }
-
-  cancel(taskId: string): boolean {
-    const task = this.tasks.get(taskId);
-    if (!task || task.status !== "running") return false;
-
-    task.abortController.abort();
-    this.updateTask(taskId, { status: "cancelled", message: "Cancelled by user" });
-    return true;
-  }
-
-  cancelAll(): number {
-    let count = 0;
-    for (const task of this.tasks.values()) {
-      if (task.status === "running") {
-        task.abortController.abort();
-        this.updateTask(task.id, { status: "cancelled", message: "Cancelled" });
-        count++;
-      }
-    }
-    return count;
-  }
-
-  clearCompleted(): number {
-    let count = 0;
-    for (const [id, task] of this.tasks) {
-      if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") {
-        this.tasks.delete(id);
-        count++;
-      }
-    }
-    if (count > 0) this.notify();
-    return count;
-  }
-
-  private updateTask(taskId: string, updates: Partial<Task>): void {
-    const task = this.tasks.get(taskId);
-    if (!task) return;
-
-    Object.assign(task, updates);
-    if (updates.status === "completed" || updates.status === "failed" || updates.status === "cancelled") {
-      task.endTime = Date.now();
-    }
-    this.notify();
   }
 }
 
-export const TaskRunner = new TaskRunnerImpl();
+interface PlanTaskRunnerOptions {
+  executor?: TaskExecutor;
+}
+
+interface TaskExecutor {
+  execute(request: TaskExecutionRequest): Promise<TaskExecutionOutput>;
+}
+
+interface TaskExecutionRequest {
+  taskId: string;
+  tag: string;
+  payload?: Record<string, unknown>;
+  contextIds: string[];
+}
+
+interface TaskExecutionOutput {
+  output: unknown;
+  outputContextId?: string;
+}
+
+class DefaultTaskExecutor implements TaskExecutor {
+  async execute(request: TaskExecutionRequest): Promise<TaskExecutionOutput> {
+    throw new Error(`No executor configured for task: ${request.tag}`);
+  }
+}
+
+// Re-export for backward compatibility
+export { PlanTaskRunner as TaskRunner };
+export type { PlanTaskRunnerOptions as TaskRunnerOptions, TaskExecutor, TaskExecutionRequest, TaskExecutionOutput };

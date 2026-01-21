@@ -1,6 +1,6 @@
 # Eve - Current Implementation Status
 
-> **Last Updated**: 2026-01-20
+> **Last Updated**: 2026-01-21
 > **Version**: 0.3.0
 
 ## Overview
@@ -59,6 +59,7 @@ Eve is a modular, local-first **AI Personal Agent Platform** built on `@mariozec
 | HTTP Server | ✅ Complete | Hono-based API with auth middleware |
 | Database | ✅ Complete | Drizzle ORM + SQLite |
 | Configuration | ✅ Complete | DB-backed ConfigManager |
+| State Layer | ✅ Complete | Context persistence + Memory management (PR #13) |
 
 ### Capabilities (AgentTools)
 
@@ -91,6 +92,7 @@ Eve is a modular, local-first **AI Personal Agent Platform** built on `@mariozec
 | `job_status_history` | Funnel tracking | ✅ |
 | `auth_tokens` | API authentication | ✅ |
 | `sys_config` | System configuration | ✅ |
+| `contexts` | Execution context chunks (PR #13) | ✅ |
 
 ### Wall-E (Chrome Extension)
 
@@ -129,7 +131,13 @@ src/
 │   ├── auth.ts           # Auth middleware
 │   ├── jobs-api.ts       # Jobs API handlers
 │   ├── resume-api.ts     # Resume API handlers
-│   └── tailor-api.ts     # Tailor API handlers
+│   ├── tailor-api.ts     # Tailor API handlers
+│   ├── context/          # Context persistence (PR #13)
+│   │   ├── ContextStore.ts
+│   │   ├── db.ts
+│   │   └── schema.ts
+│   └── memory/           # Memory management (PR #13)
+│       └── MemoryManager.ts
 ├── capabilities/
 │   ├── types.ts          # Capability interface
 │   ├── index.ts          # Capability registry
