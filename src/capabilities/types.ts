@@ -10,6 +10,8 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { ConfigManager } from "../core/config";
 import type { db } from "../db";
+import type { MemoryManager } from "../core/memory/types";
+import type { ContextStore } from "../core/context/ContextStore";
 
 /**
  * Context provided to capabilities during initialization
@@ -19,6 +21,10 @@ export interface CapabilityContext {
   db: typeof db;
   /** Configuration manager */
   config: typeof ConfigManager;
+  /** Memory manager for agent state */
+  memory: MemoryManager;
+  /** Context store for data passing */
+  context: ContextStore;
 }
 
 /**
@@ -60,5 +66,7 @@ export interface Capability {
  */
 export interface ToolResult {
   content: Array<{ type: "text"; text: string }>;
-  details?: Record<string, unknown>;
+   details?: Record<string, unknown>;
 }
+
+export { type AgentTool };
