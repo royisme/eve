@@ -21,6 +21,28 @@ export interface JobSearchResult {
   receivedAt: string;
 }
 
+const VALID_STATUSES = ["inbox", "applied", "interviewing", "offer", "rejected", "skipped"] as const;
+const LEGACY_STATUS_MAP: Record<typeof VALID_STATUSES[number], string[]> = {
+  inbox: ["New"],
+  applied: ["Applied"],
+  interviewing: ["Interview"],
+  offer: ["Offer"],
+  rejected: ["Rejected"],
+  skipped: ["Skipped"],
+};
+
+function normalizeStatus(status?: string | null): typeof VALID_STATUSES[number] {
+  if (!status) return "inbox";
+  const lower = status.toLowerCase();
+  if (VALID_STATUSES.includes(lower as typeof VALID_STATUSES[number])) {
+    return lower as typeof VALID_STATUSES[number];
+  }
+  const legacyEntry = Object.entries(LEGACY_STATUS_MAP).find(([, values]) =>
+    values.map((value) => value.toLowerCase()).includes(lower)
+  );
+  return (legacyEntry?.[0] ?? "inbox") as typeof VALID_STATUSES[number];
+}
+
 export async function searchJobs(params: JobSearchParams): Promise<JobSearchResult[]> {
   const { query, status, limit = 20 } = params;
 
@@ -39,7 +61,8 @@ export async function searchJobs(params: JobSearchParams): Promise<JobSearchResu
     .limit(limit);
 
   if (status) {
-    results = results.filter((j) => j.status === status);
+    const normalized = normalizeStatus(status);
+    results = results.filter((j) => normalizeStatus(j.status) === normalized);
   }
 
   if (query) {
@@ -51,12 +74,15 @@ export async function searchJobs(params: JobSearchParams): Promise<JobSearchResu
     );
   }
 
-  return results;
+  return results.map((job) => ({
+    ...job,
+    status: normalizeStatus(job.status),
+  }));
 }
 
 export interface JobStats {
   total: number;
-  new: number;
+  inbox: number;
   enriched: number;
   analyzed: number;
   applied: number;
@@ -66,10 +92,10 @@ export async function getJobStats(): Promise<JobStats> {
   const all = await db.select().from(jobs).all();
   return {
     total: all.length,
-    new: all.filter((j) => j.status === "New").length,
+    inbox: all.filter((j) => normalizeStatus(j.status) === "inbox").length,
     enriched: all.filter((j) => j.description !== null).length,
     analyzed: all.filter((j) => j.analysis !== null).length,
-    applied: all.filter((j) => j.status === "Applied").length,
+    applied: all.filter((j) => normalizeStatus(j.status) === "applied").length,
   };
 }
 

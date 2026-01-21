@@ -108,7 +108,7 @@ export class JobModule implements EveModule {
 
   // --- Morning Briefing ---
   async getDailyBriefing(): Promise<string> {
-    const newJobs = await JobsService.searchJobs({ status: "New" });
+    const newJobs = await JobsService.searchJobs({ status: "inbox" });
 
     if (newJobs.length === 0) return "";
 
@@ -147,7 +147,7 @@ export class JobModule implements EveModule {
     console.log(`
 📊 **Eve Job Hunter Status**
 ===========================
-📥 **Inbox (New)**:      ${stats.new}
+📥 **Inbox (New)**:      ${stats.inbox}
 蛛️ **Enriched (JD)**:    ${stats.enriched}
 🧠 **Analyzed**:         ${stats.analyzed}
 🚀 **Applied**:          ${stats.applied}
@@ -181,7 +181,7 @@ Total Tracked: ${stats.total}
     const rows = await JobsService.searchJobs({ limit: 20 });
     console.log("## 💼 Recent Jobs\n");
     for (const job of rows) {
-      const statusIcon = job.status === "New" ? "🆕" : "📋";
+      const statusIcon = job.status === "inbox" ? "🆕" : "📋";
       // We need description/analysis flags, let's fetch full job or adapt search result
       const fullJob = await JobsService.getJobById(job.id);
       const enrichedIcon = fullJob?.description ? "📄" : "";

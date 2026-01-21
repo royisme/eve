@@ -12,6 +12,8 @@ import * as resumeApi from "./core/resume-api";
 import * as tailorApi from "./core/tailor-api";
 import { syncEmails } from "./capabilities/email/services/email-service";
 import { Scheduler } from "./core/scheduler";
+import { getFunnelMetrics } from "./capabilities/analytics/services/funnel";
+import { getSkillsAnalytics } from "./capabilities/analytics/services/skills";
 import "./core/scheduler-executors";
 
 const DEFAULT_PORT = 3033;
@@ -97,19 +99,23 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
 
   // Special case for SSE
   app.get("/jobs/sync", async (c: Context) => {
-    const token = c.req.query("token");
+    const token = c.req.header("x-eve-token") || c.req.query("token");
     if (!token || !(await validateToken(token))) {
       return c.json({ error: "Unauthorized" }, 401);
     }
 
     return streamSSE(c, async (stream) => {
       try {
-        await syncEmails("from:linkedin OR from:indeed", 20, (progress) => {
+        await syncEmails(
+          "from:linkedin OR from:indeed OR from:glassdoor OR from:greenhouse OR from:lever",
+          20,
+          (progress) => {
           stream.writeSSE({
             data: JSON.stringify(progress),
             event: "message",
           });
-        });
+          }
+        );
       } catch (e) {
         stream.writeSSE({
           data: JSON.stringify({ status: "error", message: (e as Error).message }),
@@ -242,15 +248,13 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
     }
     const resumeIdRaw = c.req.query("resumeId");
     let analysis = null;
-    let cached = false;
     if (resumeIdRaw) {
       const resumeId = Number(resumeIdRaw);
       if (!Number.isFinite(resumeId)) return c.json({ error: "Invalid resumeId" }, 400);
       const result = await jobsApi.getJobAnalysis(id, resumeId);
       analysis = result.analysis;
-      cached = result.cached;
     }
-    return c.json({ job, analysis, cached });
+    return c.json({ job, analysis });
   });
 
   protectedApp.get("/jobs/:id/analysis", async (c: Context) => {
@@ -274,7 +278,7 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
     }
     try {
       const result = await jobsApi.analyzeJob(id, resumeId, forceRefresh ?? false);
-      return c.json({ ...result, cached: false });
+      return c.json(result);
     } catch (e) {
       return c.json({ error: (e as Error).message }, 400);
     }
@@ -294,11 +298,23 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
 
   // Analytics API
   protectedApp.get("/analytics/funnel", async (c: Context) => {
-    return c.json({ error: "Analytics endpoints temporarily disabled" }, 503);
+    const period = c.req.query("period") || "all";
+    return c.json(await getFunnelMetrics(period));
   });
 
   protectedApp.get("/analytics/skills", async (c: Context) => {
-    return c.json({ error: "Analytics endpoints temporarily disabled" }, 503);
+    const result = await getSkillsAnalytics();
+    return c.json({
+      top: result.topSkills.map((skill) => ({
+        skill: skill.skill,
+        matchCount: skill.jobCount,
+      })),
+      gaps: result.skillGaps.map((gap) => ({
+        skill: gap.skill,
+        mentionCount: gap.inJobs,
+        inResume: gap.inResume,
+      })),
+    });
   });
 
   // Resumes API

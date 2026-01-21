@@ -5,6 +5,7 @@ import {
   updateLastSync,
   ensureAccountsInitialized 
 } from '../capabilities/email/services/account-service';
+import { enrichPendingJobs, analyzePendingJobs } from '../capabilities/jobs/services/jobs-service';
 
 Scheduler.registerExecutor('test_task', async (job, sessionId) => {
   console.log(`[TestExecutor] Running test task: ${job.name} (session: ${sessionId})`);
@@ -66,6 +67,37 @@ Scheduler.registerExecutor('daily_briefing', async (_job, _sessionId) => {
   return { 
     success: true, 
     summary: { type: 'daily_briefing', message: 'Briefing ready' } 
+  };
+});
+
+Scheduler.registerExecutor('jobs_enrich', async (job, _sessionId) => {
+  const params = job.payloadParams ? JSON.parse(job.payloadParams) : {};
+  const limit = typeof params.limit === 'number' ? params.limit : undefined;
+
+  const result = await enrichPendingJobs(limit);
+  return {
+    success: true,
+    summary: {
+      processed: result.processed,
+      enriched: result.enriched,
+      skipped: result.skipped,
+      errors: result.errors.length,
+    },
+  };
+});
+
+Scheduler.registerExecutor('jobs_analyze', async (job, _sessionId) => {
+  const params = job.payloadParams ? JSON.parse(job.payloadParams) : {};
+  const limit = typeof params.limit === 'number' ? params.limit : undefined;
+
+  const result = await analyzePendingJobs(limit);
+  return {
+    success: true,
+    summary: {
+      processed: result.processed,
+      analyzed: result.analyzed,
+      errors: result.errors.length,
+    },
   };
 });
 

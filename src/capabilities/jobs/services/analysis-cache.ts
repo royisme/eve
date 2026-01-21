@@ -8,6 +8,7 @@ import crypto from "crypto";
 const PROMPT_VERSION = "jobs-v1";
 
 export interface AnalysisResult {
+  analysisId?: number;
   overallScore: number;
   skillsMatch: string[];
   skillsGap: string[];
@@ -15,6 +16,7 @@ export interface AnalysisResult {
   rawAnalysis: string;
   cached: boolean;
   cachedAt?: string;
+  createdAt?: string;
   model?: string;
 }
 
@@ -87,9 +89,11 @@ export async function getCachedAnalysis(
 
   const parsed = parseAnalysisResult(cached.result);
   return {
+    analysisId: cached.id,
     ...parsed,
     cached: true,
     cachedAt: cached.createdAt ?? undefined,
+    createdAt: cached.createdAt ?? undefined,
     model: cached.model,
   };
 }
@@ -117,9 +121,11 @@ export async function getLatestAnalysis(
 
   const parsed = parseAnalysisResult(cached.result);
   return {
+    analysisId: cached.id,
     ...parsed,
     cached: true,
     cachedAt: cached.createdAt ?? undefined,
+    createdAt: cached.createdAt ?? undefined,
     model: cached.model,
   };
 }
@@ -155,6 +161,8 @@ export async function analyzeJobWithResume(
   const llm = new LLMService();
   const rawAnalysis = await llm.analyzeJob(job.description, resume.content);
   const parsed = parseAnalysisResult(rawAnalysis);
+  let analysisId: number | undefined;
+  let analysisCreatedAt: string | undefined;
 
   await db.transaction(async (tx) => {
     if (parsed.overallScore > 0) {
@@ -168,13 +176,19 @@ export async function analyzeJobWithResume(
       .delete(jobAnalysis)
       .where(and(eq(jobAnalysis.jobId, jobId), eq(jobAnalysis.resumeId, resumeId)));
 
-    await tx.insert(jobAnalysis).values({
+    const inserted = await tx.insert(jobAnalysis).values({
       jobId,
       resumeId,
       model,
       promptHash,
       result: rawAnalysis,
-    });
+    }).returning();
+
+    const insertedRow = inserted[0];
+    if (insertedRow) {
+      analysisId = insertedRow.id;
+      analysisCreatedAt = insertedRow.createdAt ?? undefined;
+    }
 
     await tx
       .update(resumes)
@@ -182,7 +196,7 @@ export async function analyzeJobWithResume(
       .where(eq(resumes.id, resumeId));
   });
 
-  return { ...parsed, cached: false, model };
+  return { ...parsed, cached: false, model, analysisId, createdAt: analysisCreatedAt };
 }
 
 export async function getOrAnalyzeJob(
@@ -217,12 +231,12 @@ export async function getOrAnalyzeJob(
 export async function getKeywordPreScore(
   jobId: number,
   resumeId: number
-): Promise<number> {
+): Promise<{ score: number; keywords: string[] }> {
   const job = await db.select().from(jobs).where(eq(jobs.id, jobId)).get();
   const resume = await db.select().from(resumes).where(eq(resumes.id, resumeId)).get();
 
   if (!job || !resume) {
-    return 0;
+    return { score: 0, keywords: [] };
   }
 
   const jobText = (job.description || `${job.subject} ${job.snippet || ""}`).toLowerCase();
@@ -239,6 +253,7 @@ export async function getKeywordPreScore(
 
   let matchCount = 0;
   let totalRelevant = 0;
+  const matched = new Set<string>();
 
   for (const keyword of techKeywords) {
     const inJob = jobText.includes(keyword);
@@ -248,13 +263,17 @@ export async function getKeywordPreScore(
       totalRelevant++;
       if (inResume) {
         matchCount++;
+        matched.add(keyword);
       }
     }
   }
 
   if (totalRelevant === 0) {
-    return 50;
+    return { score: 50, keywords: [] };
   }
 
-  return Math.round((matchCount / totalRelevant) * 100);
+  return {
+    score: Math.round((matchCount / totalRelevant) * 100),
+    keywords: Array.from(matched),
+  };
 }
