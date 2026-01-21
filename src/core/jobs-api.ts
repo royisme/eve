@@ -197,7 +197,8 @@ export async function updateJob(id: number, data: Partial<{
   }
 
   const nextStatus = data.status ? normalizeStatus(data.status) : null;
-
+  const existingNormalizedStatus = normalizeStatus(existing.status);
+  
   const updateData: Record<string, unknown> = {};
   if (nextStatus) updateData.status = nextStatus;
   if (data.starred !== undefined) updateData.starred = data.starred ? 1 : 0;
@@ -207,18 +208,24 @@ export async function updateJob(id: number, data: Partial<{
     updateData.appliedAt = new Date().toISOString();
   }
 
-  await db.update(jobs)
-    .set(updateData)
-    .where(eq(jobs.id, id));
+  // Only insert history if status actually changed
+  const shouldInsertHistory = nextStatus && existingNormalizedStatus !== nextStatus;
 
-  if (nextStatus && normalizeStatus(existing.status) !== nextStatus) {
-    await db.insert(jobStatusHistory).values({
-      jobId: id,
-      oldStatus: normalizeStatus(existing.status),
-      newStatus: nextStatus,
-      changedAt: new Date().toISOString(),
-    });
-  }
+  // Execute update and history insert in a single transaction
+  await db.transaction(async (tx) => {
+    await tx.update(jobs)
+      .set(updateData)
+      .where(eq(jobs.id, id));
+
+    if (shouldInsertHistory) {
+      await tx.insert(jobStatusHistory).values({
+        jobId: id,
+        oldStatus: existingNormalizedStatus,
+        newStatus: nextStatus,
+        changedAt: new Date().toISOString(),
+      });
+    }
+  });
 
   const updated = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
   return updated[0] ? toJobResponse(updated[0]) : null;

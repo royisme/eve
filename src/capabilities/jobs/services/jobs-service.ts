@@ -31,6 +31,15 @@ const LEGACY_STATUS_MAP: Record<typeof VALID_STATUSES[number], string[]> = {
   skipped: ["Skipped"],
 };
 
+const ALL_VALID_STATUS_VALUES = new Set([
+  ...VALID_STATUSES,
+  ...Object.values(LEGACY_STATUS_MAP).flat(),
+].map((s) => s.toLowerCase()));
+
+function isValidRawStatus(status: string): boolean {
+  return ALL_VALID_STATUS_VALUES.has(status.toLowerCase());
+}
+
 function normalizeStatus(status?: string | null): typeof VALID_STATUSES[number] {
   if (!status) return "inbox";
   const lower = status.toLowerCase();
@@ -43,12 +52,19 @@ function normalizeStatus(status?: string | null): typeof VALID_STATUSES[number] 
   return (legacyEntry?.[0] ?? "inbox") as typeof VALID_STATUSES[number];
 }
 
+function escapeSearchPattern(search: string): string {
+  return search.replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
 export async function searchJobs(params: JobSearchParams): Promise<JobSearchResult[]> {
   const { query, status, limit = 20 } = params;
 
   const conditions: any[] = [];
 
   if (status) {
+    if (!isValidRawStatus(status)) {
+      throw new Error(`Invalid status: ${status}. Valid values: ${Array.from(ALL_VALID_STATUS_VALUES).join(", ")}`);
+    }
     const normalized = normalizeStatus(status);
     const variants = LEGACY_STATUS_MAP[normalized] ?? [];
     const allStatuses = [normalized, ...variants];
@@ -60,7 +76,7 @@ export async function searchJobs(params: JobSearchParams): Promise<JobSearchResu
   }
 
   if (query) {
-    const q = query.toLowerCase();
+    const q = escapeSearchPattern(query.toLowerCase());
     conditions.push(
       or(
         like(jobs.company, `%${q}%`),
