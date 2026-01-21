@@ -8,7 +8,7 @@ export const searchJobsTool: AgentTool<any, any> = {
   description: "Search for job opportunities by keyword, company name, or role. Returns matching jobs from the database.",
   parameters: Type.Object({
     query: Type.Optional(Type.String({ description: "Search terms to match against company or role" })),
-    status: Type.Optional(Type.String({ description: "Filter by job status: New, Applied, Interview, Rejected, Offer" })),
+    status: Type.Optional(Type.String({ description: "Filter by job status: inbox, applied, interviewing, rejected, offer, skipped" })),
     limit: Type.Optional(Type.Number({ description: "Maximum number of results to return (default: 20)" })),
   }),
   execute: async (_toolCallId, params, _signal, onUpdate) => {

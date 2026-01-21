@@ -32,12 +32,12 @@ describe("Jobs Capability Tools", () => {
     const listTool = jobsCapability.tools.find(t => t.name === "jobs_list")!;
     const searchSpy = spyOn(JobsService, "searchJobs").mockImplementation(async () => []);
     const statsSpy = spyOn(JobsService, "getJobStats").mockImplementation(async () => ({
-      total: 10, new: 5, enriched: 3, analyzed: 2, applied: 1
+      total: 10, inbox: 5, enriched: 3, analyzed: 2, applied: 1
     }));
     
-    await listTool.execute("test-call-id", { status: "New", limit: 5 });
+    await listTool.execute("test-call-id", { status: "inbox", limit: 5 });
     
-    expect(searchSpy).toHaveBeenCalledWith({ status: "New", limit: 5 });
+    expect(searchSpy).toHaveBeenCalledWith({ status: "inbox", limit: 5 });
     expect(statsSpy).toHaveBeenCalled();
     
     searchSpy.mockRestore();

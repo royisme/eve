@@ -127,11 +127,11 @@ export const jobPreScoreTool: AgentTool<any, any> = {
       effectiveResumeId = defaultResume.id;
     }
 
-    const score = await getKeywordPreScore(params.jobId, effectiveResumeId);
+    const result = await getKeywordPreScore(params.jobId, effectiveResumeId);
 
     return {
-      content: [{ type: "text", text: `Quick match score: ${score}% (keyword-based, not AI analysis)` }],
-      details: { score, resumeId: effectiveResumeId, method: "keyword" },
+      content: [{ type: "text", text: `Quick match score: ${result.score}% (keyword-based, not AI analysis)` }],
+      details: { score: result.score, keywords: result.keywords, resumeId: effectiveResumeId, method: "keyword" },
     };
   },
 };

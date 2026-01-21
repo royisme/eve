@@ -7,7 +7,7 @@ mock.module("../../../src/services/llm", () => {
     return {
         LLMService: class {
             async extractJobDetails() {
-                return { company: "Mock AI Company", role: "Mock AI Role", status: "New" };
+                return { company: "Mock AI Company", title: "Mock AI Role", status: "inbox" };
             }
         }
     };
@@ -31,7 +31,7 @@ describe("LinkedInAdapter", () => {
         
         expect(result.length).toBe(1);
         expect(result[0].company).toBe("Google");
-        expect(result[0].role).toBe("Software Engineer");
+        expect(result[0].title).toBe("Software Engineer");
     });
 
     test("should extract Company: Role format", async () => {
@@ -49,7 +49,7 @@ describe("LinkedInAdapter", () => {
         
         // For now, let's verify it behaves deterministically as per current code.
         const result = await adapter.extract(email);
-        expect(result[0].role).toBe("Google");
+        expect(result[0].title).toBe("Google");
     });
 });
 

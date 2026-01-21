@@ -1,6 +1,6 @@
 import { db } from "../../../db";
 import { jobs } from "../../../db/schema";
-import { eq, and, isNull, isNotNull, desc } from "drizzle-orm";
+import { eq, and, or, like, isNull, isNotNull, desc } from "drizzle-orm";
 import { FirecrawlService } from "../../../services/firecrawl";
 import { LLMService } from "../../../services/llm";
 import { ConfigManager } from "../../../core/config";
@@ -21,10 +21,55 @@ export interface JobSearchResult {
   receivedAt: string;
 }
 
+const VALID_STATUSES = ["inbox", "applied", "interviewing", "offer", "rejected", "skipped"] as const;
+const LEGACY_STATUS_MAP: Record<typeof VALID_STATUSES[number], string[]> = {
+  inbox: ["New"],
+  applied: ["Applied"],
+  interviewing: ["Interview"],
+  offer: ["Offer"],
+  rejected: ["Rejected"],
+  skipped: ["Skipped"],
+};
+
+function normalizeStatus(status?: string | null): typeof VALID_STATUSES[number] {
+  if (!status) return "inbox";
+  const lower = status.toLowerCase();
+  if (VALID_STATUSES.includes(lower as typeof VALID_STATUSES[number])) {
+    return lower as typeof VALID_STATUSES[number];
+  }
+  const legacyEntry = Object.entries(LEGACY_STATUS_MAP).find(([, values]) =>
+    values.map((value) => value.toLowerCase()).includes(lower)
+  );
+  return (legacyEntry?.[0] ?? "inbox") as typeof VALID_STATUSES[number];
+}
+
 export async function searchJobs(params: JobSearchParams): Promise<JobSearchResult[]> {
   const { query, status, limit = 20 } = params;
 
-  let results = await db
+  const conditions: any[] = [];
+
+  if (status) {
+    const normalized = normalizeStatus(status);
+    const variants = LEGACY_STATUS_MAP[normalized] ?? [];
+    const allStatuses = [normalized, ...variants];
+    if (allStatuses.length === 1) {
+      conditions.push(eq(jobs.status, allStatuses[0]));
+    } else {
+      conditions.push(or(...allStatuses.map((s) => eq(jobs.status, s))));
+    }
+  }
+
+  if (query) {
+    const q = query.toLowerCase();
+    conditions.push(
+      or(
+        like(jobs.company, `%${q}%`),
+        like(jobs.title, `%${q}%`)
+      )
+    );
+  }
+
+  let baseQuery = db
     .select({
       id: jobs.id,
       company: jobs.company,
@@ -35,28 +80,23 @@ export async function searchJobs(params: JobSearchParams): Promise<JobSearchResu
       receivedAt: jobs.receivedAt,
     })
     .from(jobs)
-    .orderBy(desc(jobs.receivedAt))
-    .limit(limit);
+    .orderBy(desc(jobs.receivedAt));
 
-  if (status) {
-    results = results.filter((j) => j.status === status);
-  }
+  const finalQuery = conditions.length > 0
+    ? baseQuery.where(and(...conditions)).limit(limit)
+    : baseQuery.limit(limit);
 
-  if (query) {
-    const q = query.toLowerCase();
-    results = results.filter(
-      (j) =>
-        j.company?.toLowerCase().includes(q) ||
-        j.title?.toLowerCase().includes(q)
-    );
-  }
+  const results = await finalQuery;
 
-  return results;
+  return results.map((job) => ({
+    ...job,
+    status: normalizeStatus(job.status),
+  }));
 }
 
 export interface JobStats {
   total: number;
-  new: number;
+  inbox: number;
   enriched: number;
   analyzed: number;
   applied: number;
@@ -66,10 +106,10 @@ export async function getJobStats(): Promise<JobStats> {
   const all = await db.select().from(jobs).all();
   return {
     total: all.length,
-    new: all.filter((j) => j.status === "New").length,
+    inbox: all.filter((j) => normalizeStatus(j.status) === "inbox").length,
     enriched: all.filter((j) => j.description !== null).length,
     analyzed: all.filter((j) => j.analysis !== null).length,
-    applied: all.filter((j) => j.status === "Applied").length,
+    applied: all.filter((j) => normalizeStatus(j.status) === "applied").length,
   };
 }
 
