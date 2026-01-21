@@ -279,16 +279,18 @@ export class EveOrchestrator {
     const execResult = executionResults.find((r) => r.taskId === task.id);
     const route = this.routingEngine.route(task.tag, text);
 
-    if (!execResult || execResult.status === "failed") {
+    if (!execResult || execResult.status !== "success") {
+      const errorMessage = execResult?.error ?? execResult?.status ?? "no result";
       return {
         taskId: task.id,
         tag: task.tag,
         routedAgentId: route.agentId,
-        executedAgentId: "failed",
+        executedAgentId: execResult?.status === "skipped" ? "skipped" : "failed",
         route,
-        error: execResult?.error
-          ? { message: execResult.error, type: "unknown" }
-          : undefined,
+        error: {
+          message: errorMessage,
+          type: "unknown",
+        },
       };
     }
 

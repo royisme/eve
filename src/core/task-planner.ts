@@ -109,10 +109,10 @@ export class TaskPlanner {
     intentToTasks: Map<string, PlannedTask[]>
   ): void {
     // Set up parallel groups for tasks of the same intent
-    for (const [, taskList] of intentToTasks) {
+    for (const [intent, taskList] of intentToTasks) {
       if (taskList.length > 1) {
-        for (let i = 0; i < taskList.length; i++) {
-          taskList[i].parallelGroup = `intent_${i}`;
+        for (const task of taskList) {
+          task.parallelGroup = `intent_${intent}`;
         }
       }
     }
@@ -168,12 +168,22 @@ export class TaskPlanner {
   private isLinearChain(tasks: PlannedTask[]): boolean {
     if (tasks.length < 2) return true;
 
-    // A linear chain has each task (except last) depending on previous
-    let taskCount = 0;
-    for (const task of tasks) {
-      if (task.dependsOn.length > 1) return false;
-      taskCount++;
+    // A strict linear chain: first task has no dependencies,
+    // each subsequent task depends exactly on the immediately preceding task
+    const taskById = new Map(tasks.map((t) => [t.id, t]));
+
+    // First task must have no dependencies
+    if (tasks[0].dependsOn.length > 0) return false;
+
+    // Each subsequent task must depend exactly on the previous task
+    for (let i = 1; i < tasks.length; i++) {
+      const current = tasks[i];
+      const previous = tasks[i - 1];
+
+      if (current.dependsOn.length !== 1) return false;
+      if (current.dependsOn[0] !== previous.id) return false;
     }
+
     return true;
   }
 

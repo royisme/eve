@@ -35,10 +35,8 @@ export class PlanTaskRunner {
     const results: TaskExecutionResult[] = [];
     const contextIds = new Map<string, string[]>();
 
-    if (inputContextIds) {
-      for (const id of inputContextIds) {
-        contextIds.set("input", [id]);
-      }
+    if (inputContextIds && inputContextIds.length > 0) {
+      contextIds.set("input", [...inputContextIds]);
     }
 
     for (const task of plan.tasks) {
@@ -65,10 +63,8 @@ export class PlanTaskRunner {
     const pendingDependencies = new Map<string, Set<string>>();
     const taskMap = new Map<string, PlannedTask>();
 
-    if (inputContextIds) {
-      for (const id of inputContextIds) {
-        contextIds.set("input", [id]);
-      }
+    if (inputContextIds && inputContextIds.length > 0) {
+      contextIds.set("input", [...inputContextIds]);
     }
 
     for (const task of plan.tasks) {
@@ -78,6 +74,15 @@ export class PlanTaskRunner {
       if (task.dependsOn.length === 0) {
         readyTasks.add(task.id);
       }
+    }
+
+    // Check for circular dependencies before starting
+    const totalTasks = plan.tasks.length;
+    if (readyTasks.size === 0 && totalTasks > 0) {
+      const remainingTaskIds = Array.from(taskMap.keys());
+      throw new Error(
+        `Circular dependency detected. Unable to schedule tasks: ${remainingTaskIds.join(", ")}`
+      );
     }
 
     while (readyTasks.size > 0) {

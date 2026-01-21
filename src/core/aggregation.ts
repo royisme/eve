@@ -31,10 +31,11 @@ export class ResultAggregator {
     const strategyFn = this.strategies.get(input.plan.aggregationStrategy);
 
     if (!strategyFn) {
+      const mergeResult = this.merge(input);
       return {
-        content: this.merge(input),
+        content: mergeResult.content,
         strategy: "merge",
-        summary: `Unknown strategy '${input.plan.aggregationStrategy}', defaulted to merge`,
+        summary: `Unknown strategy '${input.plan.aggregationStrategy}', defaulted to merge. ${mergeResult.summary}`,
         warnings: [`Strategy '${input.plan.aggregationStrategy}' not found, using merge`],
       };
     }

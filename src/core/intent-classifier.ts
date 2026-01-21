@@ -135,11 +135,18 @@ Return only the JSON, no additional text.`;
         throw new Error("Response is not an array");
       }
 
-      return parsed.map((item) => ({
-        tag: String(item.tag ?? "generic:request"),
-        confidence: Math.max(0, Math.min(1, Number(item.confidence) ?? 0.5)),
-        reason: String(item.reason ?? ""),
-      }));
+      return parsed.map((item) => {
+        let conf = Number(item.confidence);
+        if (!Number.isFinite(conf)) {
+          conf = 0.5;
+        }
+        conf = Math.max(0, Math.min(1, conf));
+        return {
+          tag: String(item.tag ?? "generic:request"),
+          confidence: conf,
+          reason: String(item.reason ?? ""),
+        };
+      });
     } catch (error) {
       console.warn("[IntentClassifier] Failed to parse LLM response:", error);
       return [];
