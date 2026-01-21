@@ -3,7 +3,7 @@ import type { Context } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import { bodyLimit } from "hono/body-limit";
-import { AgentManager } from "./agents/manager";
+import { getEveService } from "./core/eve-service";
 import { getCapabilities } from "./capabilities";
 import { Dispatcher } from "./core/dispatcher";
 import { authMiddleware, validateToken, hasPairedDevice, createPairingToken } from "./core/auth";
@@ -25,30 +25,26 @@ type IngestPayload = {
 
 export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
   const app = new Hono();
-  const agentManager = new AgentManager();
+  const eveService = getEveService();
   const dispatcher = new Dispatcher();
 
-  await agentManager.init();
+  await eveService.init();
   
   await Scheduler.start();
 
   app.use("/*", cors());
 
-  // Apply body limit globally for all POST/PUT/PATCH requests (pre-parse protection)
   app.use("/*", bodyLimit({
     maxSize: MAX_CONTENT_SIZE,
     onError: (c) => c.json({ error: `Request body too large (max ${MAX_CONTENT_SIZE / 1024 / 1024}MB)` }, 413),
   }));
 
-  // Public health check
-  app.get("/health", (c: Context) => {
-    const agent = agentManager.getAgent();
+  app.get("/health", async (c: Context) => {
+    const caps = await getCapabilities();
     return c.json({
       status: "ok",
       version: "0.3.0",
-      agent: {
-        tools: agent.state.tools.map(t => t.name),
-      }
+      capabilities: caps.map((cap) => cap.name),
     });
   });
 
@@ -140,8 +136,8 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
   });
 
   protectedApp.post("/chat", async (c: Context) => {
-    const { prompt, agentName } = await c.req.json();
-    const response = await agentManager.prompt(agentName, prompt);
+    const { prompt } = await c.req.json();
+    const response = await eveService.prompt(prompt);
     return c.json({ response });
   });
 
