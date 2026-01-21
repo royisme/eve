@@ -56,6 +56,13 @@ async function getApiKey(provider: string): Promise<string | undefined> {
   return undefined;
 }
 
+/**
+ * Initialize all registered capabilities and perform post-initialization cleanup.
+ *
+ * Constructs a CapabilityContext (db, ConfigManager, memory manager, and context store),
+ * calls each capability's `init` function if present, and then attempts to delete expired
+ * contexts from the context store, logging the number cleaned or any cleanup failure.
+ */
 export async function initializeCapabilities(): Promise<void> {
   const ctx: CapabilityContext = {
     db,
@@ -82,6 +89,18 @@ export async function initializeCapabilities(): Promise<void> {
   // TODO: Daily memory cleanup requires iterating known agent IDs (deferred for MVP)
 }
 
+/**
+ * Create and configure an Eve Agent instance.
+ *
+ * Resolves the system prompt, provider, and model from `config` (falling back to defaults)
+ * and constructs an Agent preloaded with capability tools.
+ *
+ * @param config - Optional configuration for the agent:
+ *   - `systemPrompt`: override for the agent's system prompt
+ *   - `provider`: provider identifier to select the model provider
+ *   - `model`: model identifier for the selected provider
+ * @returns The created Agent configured with the resolved system prompt, model, and capability tools
+ */
 export async function createEveAgent(config: EveAgentConfig = {}): Promise<Agent> {
   const systemPrompt = config.systemPrompt || DEFAULT_SYSTEM_PROMPT;
   const provider = config.provider || DEFAULT_PROVIDER;

@@ -5,6 +5,11 @@ import { join } from "path";
 import { contexts } from "./schema";
 import { getDataDir } from "../data-dir";
 
+/**
+ * Compute and ensure the filesystem path for the context SQLite database.
+ *
+ * @returns The filesystem path to the "context.db" file inside the application's data/context directory
+ */
 function getContextDbPath() {
     const baseDir = getDataDir();
     const ctxDir = join(baseDir, "context");
@@ -15,6 +20,13 @@ function getContextDbPath() {
 let _db: ReturnType<typeof drizzle<typeof import("./schema")>> | null = null;
 let _sqlite: Database | null = null;
 
+/**
+ * Get or initialize the singleton Drizzle ORM instance for the context schema.
+ *
+ * Ensures the on-disk SQLite database and the `contexts` table (with its indexes) exist before returning the instance.
+ *
+ * @returns The initialized Drizzle ORM instance bound to the context schema for interacting with the `contexts` table.
+ */
 export function getContextDb() {
     if (_db) return _db;
 
@@ -48,6 +60,11 @@ export function getContextDb() {
     return _db;
 }
 
+/**
+ * Close the context SQLite connection and clear cached database instances.
+ *
+ * If a connection exists, closes the Bun SQLite database and resets the internal Drizzle and SQLite references to null.
+ */
 export function closeContextDb(): void {
     if (_sqlite) {
         _sqlite.close();

@@ -36,10 +36,24 @@ const ALL_VALID_STATUS_VALUES = new Set([
   ...Object.values(LEGACY_STATUS_MAP).flat(),
 ].map((s) => s.toLowerCase()));
 
+/**
+ * Checks whether a raw status string corresponds to a known current or legacy status.
+ *
+ * @param status - The status string to validate (case-insensitive)
+ * @returns `true` if `status` matches a known current or legacy status value, `false` otherwise.
+ */
 function isValidRawStatus(status: string): boolean {
   return ALL_VALID_STATUS_VALUES.has(status.toLowerCase());
 }
 
+/**
+ * Normalize a raw job status string to a canonical current status.
+ *
+ * Accepts current status values (case-insensitive) or legacy status labels and maps them to one of the canonical statuses. If `status` is missing or cannot be mapped, returns `"inbox"`.
+ *
+ * @param status - Raw status string (may be a current value or a legacy label)
+ * @returns One of the canonical status values: `"inbox"`, `"enriched"`, `"analyzed"`, or `"applied"`
+ */
 function normalizeStatus(status?: string | null): typeof VALID_STATUSES[number] {
   if (!status) return "inbox";
   const lower = status.toLowerCase();
@@ -52,10 +66,23 @@ function normalizeStatus(status?: string | null): typeof VALID_STATUSES[number] 
   return (legacyEntry?.[0] ?? "inbox") as typeof VALID_STATUSES[number];
 }
 
+/**
+ * Escape SQL LIKE wildcard characters in a search string.
+ *
+ * @param search - The input string to escape for use in a SQL LIKE pattern
+ * @returns The input with `%` and `_` escaped as `\%` and `\_`
+ */
 function escapeSearchPattern(search: string): string {
   return search.replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
+/**
+ * Search for jobs filtered by an optional text query and/or status, returning matching job summaries ordered by `receivedAt` descending.
+ *
+ * @param params - Search parameters: `query` (matches company or title, case-insensitive; `%` and `_` are escaped), `status` (current or legacy status values, case-insensitive; invalid values cause an error), and `limit` (maximum number of results, defaults to 20)
+ * @returns An array of job summary objects with fields `id`, `company`, `title`, `status`, `score`, `url`, and `receivedAt`; each job's `status` is normalized to the current status values
+ * @throws Error - If `status` is provided but is not one of the accepted current or legacy status values
+ */
 export async function searchJobs(params: JobSearchParams): Promise<JobSearchResult[]> {
   const { query, status, limit = 20 } = params;
 

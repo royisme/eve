@@ -181,6 +181,22 @@ export async function getJobStats() {
   return result;
 }
 
+/**
+ * Update selected fields of a job and record a status change in history when applicable.
+ *
+ * Validates a provided status value, applies any of the supplied updates (status, starred, score),
+ * sets `appliedAt` when the new status is `applied`, and inserts a status-history entry only if the
+ * normalized status changes. Both the job update and optional history insert are executed in a single transaction.
+ *
+ * @param id - The numeric ID of the job to update
+ * @param data - Partial update object. Supported properties:
+ *   - `status`: new status value (legacy or modern variants accepted)
+ *   - `starred`: whether the job is starred
+ *   - `score`: numeric match score
+ * @returns The updated job formatted for responses, or `null` if the job cannot be found after the update
+ * @throws Error - If the job with `id` does not exist
+ * @throws Error - If `data.status` is provided but is not a valid status (error message lists valid values)
+ */
 export async function updateJob(id: number, data: Partial<{
   status: string;
   starred: boolean;
