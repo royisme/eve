@@ -124,7 +124,7 @@ export class RoutingEngine {
       if (uniqueAgents.size > 1) {
         console.warn(
           `[RoutingEngine] Conflict: ${topMatches.length} routes at priority ${topPriority}: ` +
-            topMatches.map((r) => `${r.agentId} (${r.matchedPattern})`).join(", ") +
+            topMatches.map((r) => `${r.agentId} (${r.matchedPattern ?? r.source})`).join(", ") +
             ". Falling back to Eve."
         );
         return {
@@ -173,7 +173,11 @@ export class RoutingEngine {
             topMatches.map((m) => `${m.agent} (${m.pattern})`).join(", ") +
             ". Falling back to Eve."
         );
-        return null;
+        return {
+          agentId: "eve",
+          source: "fallback",
+          priority: 0,
+        };
       }
     }
 
@@ -207,11 +211,14 @@ export class RoutingEngine {
       return null;
     }
 
+    // Sort by agent id for deterministic selection
+    matchingAgents.sort((a, b) => a.agent.id.localeCompare(b.agent.id));
+
     if (matchingAgents.length > 1) {
       console.warn(
         `[RoutingEngine] Multiple agents claim responsibility for "${taskTag}": ` +
           matchingAgents.map((m) => m.agent.id).join(", ") +
-          ". Using first match."
+          `. Using "${matchingAgents[0].agent.id}" (alphabetically first).`
       );
     }
 
