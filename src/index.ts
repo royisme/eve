@@ -1,10 +1,6 @@
 #!/usr/bin/env bun
 export {};
 
-import { ConfigReader } from "./core/config-reader";
-
-ConfigReader.load();
-
 const args = Bun.argv.slice(2);
 
 if (args.includes("--help")) {
@@ -29,6 +25,10 @@ Environment Variables:
   `);
   process.exit(0);
 }
+
+import { ConfigReader } from "./core/config-reader";
+
+ConfigReader.load();
 
 if (args.length === 0) {
   if (process.stdout.isTTY) {
