@@ -3,11 +3,16 @@ import { ConfigReader } from "./config-reader";
 import { RoutingEngine, type RoutingResult } from "./routing-engine";
 import { AgentRegistry } from "./agent-registry";
 import type { AgentRoom } from "./agent-room";
-import { ContextStore, type ContextRecord } from "./context-store";
+import { ContextStore, type ContextItem } from "./context/ContextStore";
 import { createEveAgent } from "./agent";
 import type { ResolvedModel } from "./model-resolver";
 import { ModelResolver } from "./model-resolver";
 import type { EveConfig } from "./config-schema";
+import { TaskPlanner } from "./task-planner";
+import { TaskRunner } from "./task-runner";
+import { ResultAggregator } from "./aggregation";
+import type { TaskPlan, TaskExecutionResult } from "./types/planning";
+import { MemoryManager } from "./memory";
 
 export type OrchestratorMode = "direct" | "orchestrator";
 
@@ -69,7 +74,7 @@ export interface AgentExecutionRequest {
   task: OrchestratorTask;
   model: ResolvedModel;
   systemPrompt: string;
-  contexts: ContextRecord[];
+  contexts: ContextItem[];
 }
 
 export interface AgentExecutionResult {
@@ -87,6 +92,9 @@ export interface OrchestratorOptions {
   executor?: AgentExecutor;
   config?: EveConfig;
   modelResolver?: ModelResolver;
+  taskPlanner?: TaskPlanner;
+  taskRunner?: TaskRunner;
+  memoryManager?: MemoryManager;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -175,6 +183,9 @@ export class EveOrchestrator {
   private executor: AgentExecutor;
   private config: EveConfig;
   private modelResolver: ModelResolver;
+  private taskPlanner: TaskPlanner;
+  private taskRunner: TaskRunner;
+  private memoryManager?: MemoryManager;
   private now: () => Date;
   private sleep: (ms: number) => Promise<void>;
 
@@ -183,13 +194,11 @@ export class EveOrchestrator {
     this.agentRegistry = options.agentRegistry ?? new AgentRegistry();
     this.config = options.config ?? ConfigReader.get();
     this.modelResolver = options.modelResolver ?? ConfigReader.getModelResolver();
-    this.contextStore =
-      options.contextStore ??
-      new ContextStore({
-        now: options.now,
-        defaultExpiryHours: this.config.defaults?.context?.default_expiry_hours,
-      });
+    this.contextStore = options.contextStore ?? new ContextStore();
     this.executor = options.executor ?? new DefaultAgentExecutor();
+    this.taskPlanner = options.taskPlanner ?? new TaskPlanner();
+    this.taskRunner = options.taskRunner ?? new TaskRunner();
+    this.memoryManager = options.memoryManager;
     this.now = options.now ?? (() => new Date());
     this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
 
@@ -202,34 +211,122 @@ export class EveOrchestrator {
 
   async handle(request: OrchestratorRequest): Promise<OrchestratorResponse> {
     const mode = this.config.eve.role;
-    const tasks = this.buildTasks(request);
+    const requestId = request.id ?? `req_${this.now().getTime()}`;
 
+    // If tasks are provided, use them directly (manual mode)
+    if (request.tasks && request.tasks.length > 0) {
+      const results = await Promise.all(
+        request.tasks.map((task) => this.dispatchTask(task, request.text, mode))
+      );
+
+      return {
+        requestId,
+        mode,
+        results,
+        output: this.aggregateResults(results),
+      };
+    }
+
+    // Otherwise, use planning to create task plan
+    const plan = await this.planRequest(request);
+
+    // Execute the plan
+    const executionResults = await this.taskRunner.run(plan, request.contextIds);
+
+    // Convert execution results to TaskResult format
     const results = await Promise.all(
-      tasks.map((task) => this.dispatchTask(task, request.text, mode))
+      plan.tasks.map((task) => this.convertToTaskResult(task, executionResults, request.text, mode))
     );
 
+    // Aggregate final output
+    const aggregator = new ResultAggregator();
+    const aggregated = aggregator.aggregate({
+      plan,
+      results: executionResults,
+      contextContents: new Map(),
+    });
+
+    // Log to memory if available
+    if (this.memoryManager) {
+      await this.logToMemory(requestId, request, plan, executionResults);
+    }
+
     return {
-      requestId: request.id ?? `req_${this.now().getTime()}`,
+      requestId,
       mode,
       results,
-      output: this.aggregateResults(results),
+      output: aggregated.content,
     };
   }
 
-  private buildTasks(request: OrchestratorRequest): OrchestratorTask[] {
-    if (request.tasks && request.tasks.length > 0) {
-      return request.tasks;
+  private async planRequest(request: OrchestratorRequest): Promise<TaskPlan> {
+    if (request.text) {
+      return this.taskPlanner.plan(request.text);
     }
 
     const tag = request.taskTags?.[0] ?? "generic:request";
-    return [
-      {
-        id: `task_${this.now().getTime()}`,
-        tag,
-        payload: request.payload,
-        contextIds: request.contextIds,
-      },
-    ];
+    return this.taskPlanner.createPlan(request.text ?? "", [
+      { tag, confidence: 1.0, reason: "Explicit task tag provided" },
+    ]);
+  }
+
+  private async convertToTaskResult(
+    task: OrchestratorTask,
+    executionResults: TaskExecutionResult[],
+    text: string | undefined,
+    mode: OrchestratorMode
+  ): Promise<TaskResult> {
+    const execResult = executionResults.find((r) => r.taskId === task.id);
+    const route = this.routingEngine.route(task.tag, text);
+
+    if (!execResult || execResult.status === "failed") {
+      return {
+        taskId: task.id,
+        tag: task.tag,
+        routedAgentId: route.agentId,
+        executedAgentId: "failed",
+        route,
+        error: execResult?.error
+          ? { message: execResult.error, type: "unknown" }
+          : undefined,
+      };
+    }
+
+    return {
+      taskId: task.id,
+      tag: task.tag,
+      routedAgentId: route.agentId,
+      executedAgentId: route.agentId === "eve" ? "eve" : route.agentId,
+      output: execResult.output,
+      outputContextId: execResult.outputContextId,
+      route,
+    };
+  }
+
+  private async logToMemory(
+    requestId: string,
+    request: OrchestratorRequest,
+    plan: TaskPlan,
+    results: TaskExecutionResult[]
+  ): Promise<void> {
+    if (!this.memoryManager) return;
+
+    try {
+      const sessionEntry = {
+        id: requestId,
+        startedAt: new Date().toISOString(),
+        tasks: results.map((r): { type: string; durationMs?: number; status: "success" | "error"; error?: string } => ({
+          type: r.tag,
+          durationMs: r.durationMs,
+          status: r.status === "success" ? "success" : "error",
+          error: r.error,
+        })),
+      };
+
+      await this.memoryManager.recordToDaily("eve", sessionEntry);
+    } catch (error) {
+      console.warn("[EveOrchestrator] Failed to log to memory:", error);
+    }
   }
 
   private async dispatchTask(
@@ -284,7 +381,7 @@ export class EveOrchestrator {
         ? this.getAgentModels(agent)
         : [agent.config.model.primary];
     const retryPolicy = this.getRetryPolicy(agent);
-    const contexts = this.loadContexts(task.contextIds);
+    const contexts = await this.loadContexts(task.contextIds);
 
     if (errorHandling.fallback_strategy === "delegate_to_eve") {
       return {
@@ -316,13 +413,17 @@ export class EveOrchestrator {
         );
 
         const outputContextId = task.outputContextType
-          ? this.contextStore.create({
-              type: task.outputContextType,
-              content: output,
-              agentId,
-              parentIds: task.contextIds,
-              ttlHours: task.outputContextTtlHours,
-            }).id
+          ? (
+              await this.contextStore.save({
+                type: task.outputContextType,
+                content: output,
+                agentId,
+                parentIds: task.contextIds,
+                expiresAt: task.outputContextTtlHours
+                  ? new Date(Date.now() + task.outputContextTtlHours * 60 * 60 * 1000).toISOString()
+                  : undefined,
+              })
+            ).id
           : undefined;
 
         return {
@@ -379,7 +480,7 @@ export class EveOrchestrator {
       maxDelayMs: this.config.defaults?.retry?.max_delay_ms ?? 30000,
     };
 
-    const contexts = this.loadContexts(task.contextIds);
+    const contexts = await this.loadContexts(task.contextIds);
     const evePrompt = this.config.eve.system_prompt ?? DEFAULT_EVE_PROMPT;
 
     for (const model of models) {
@@ -504,11 +605,10 @@ export class EveOrchestrator {
     return "unknown";
   }
 
-  private loadContexts(ids?: string[]): ContextRecord[] {
+  private async loadContexts(ids?: string[]): Promise<ContextItem[]> {
     if (!ids || ids.length === 0) return [];
-    return ids
-      .map((id) => this.contextStore.get(id))
-      .filter((record): record is ContextRecord => record !== null);
+    const results = await this.contextStore.getMany(ids);
+    return results.filter((record): record is ContextItem => record !== null);
   }
 
   private getAgentModels(agent: AgentRoom): ResolvedModel[] {
