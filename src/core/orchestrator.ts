@@ -9,7 +9,7 @@ import type { ResolvedModel } from "./model-resolver";
 import { ModelResolver } from "./model-resolver";
 import type { EveConfig } from "./config-schema";
 import { TaskPlanner } from "./task-planner";
-import { TaskRunner } from "./task-runner";
+import { TaskRunner, type TaskExecutor, type TaskExecutionRequest, type TaskExecutionOutput } from "./task-runner";
 import { ResultAggregator } from "./aggregation";
 import type { TaskPlan, TaskExecutionResult } from "./types/planning";
 import { MemoryManager } from "./memory";
@@ -108,6 +108,37 @@ interface RetryPolicy {
 
 const DEFAULT_EVE_PROMPT = "You are Eve, a personal AI orchestrator.";
 
+/**
+ * Executor that uses the orchestrator's dispatchTask for planned tasks
+ */
+class OrchestratorTaskExecutor implements TaskExecutor {
+  private orchestrator: EveOrchestrator;
+
+  constructor(orchestrator: EveOrchestrator) {
+    this.orchestrator = orchestrator;
+  }
+
+  async execute(request: TaskExecutionRequest): Promise<TaskExecutionOutput> {
+    const task: OrchestratorTask = {
+      id: request.taskId,
+      tag: request.tag,
+      payload: request.payload,
+      contextIds: request.contextIds,
+    };
+
+    const result = await this.orchestrator.dispatchTaskForRunner(task);
+
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
+
+    return {
+      output: result.output,
+      outputContextId: result.outputContextId,
+    };
+  }
+}
+
 class DefaultAgentExecutor implements AgentExecutor {
   private agents = new Map<string, Agent>();
 
@@ -197,7 +228,9 @@ export class EveOrchestrator {
     this.contextStore = options.contextStore ?? new ContextStore();
     this.executor = options.executor ?? new DefaultAgentExecutor();
     this.taskPlanner = options.taskPlanner ?? new TaskPlanner();
-    this.taskRunner = options.taskRunner ?? new TaskRunner();
+    this.taskRunner = options.taskRunner ?? new TaskRunner({
+      executor: new OrchestratorTaskExecutor(this),
+    });
     this.memoryManager = options.memoryManager;
     this.now = options.now ?? (() => new Date());
     this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
@@ -207,6 +240,13 @@ export class EveOrchestrator {
 
   init(): void {
     this.agentRegistry.discoverAndLoad();
+  }
+
+  /**
+   * Internal method for TaskRunner to dispatch tasks
+   */
+  async dispatchTaskForRunner(task: OrchestratorTask): Promise<TaskResult> {
+    return this.dispatchTask(task, undefined, this.config.eve.role);
   }
 
   async handle(request: OrchestratorRequest): Promise<OrchestratorResponse> {

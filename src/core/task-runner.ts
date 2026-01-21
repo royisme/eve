@@ -1,4 +1,6 @@
 import type { PlannedTask, TaskExecutionResult, TaskPlan } from "./types/planning";
+import type { OrchestratorTask } from "./orchestrator";
+import type { RoutingResult } from "./routing-engine";
 
 /**
  * Plan Task Runner
@@ -90,19 +92,23 @@ export class PlanTaskRunner {
         Array.from(readyTasks).map((id) => taskMap.get(id)!)
       );
 
-      for (const group of parallelGroups) {
-        const groupResults = await Promise.all(
-          group.map((task) => this.executeTask(task, this.getInputContextIds(task, contextIds)))
-        );
+        for (const group of parallelGroups) {
+          const groupResults = await Promise.all(
+            group.map((task) => this.executeTask(task, this.getInputContextIds(task, contextIds)))
+          );
 
-        for (const result of groupResults) {
-          taskResults.set(result.taskId, result);
-          results.push(result);
+          for (const result of groupResults) {
+            taskResults.set(result.taskId, result);
+            results.push(result);
 
-          if (result.outputContextId) {
-            contextIds.set(result.tag.replace(":", "_") + "_output", [result.outputContextId]);
+            if (result.outputContextId) {
+              // Use the planned task's outputContextType as the key for downstream lookups
+              const task = taskMap.get(result.taskId);
+              if (task) {
+                contextIds.set(task.outputContextType, [result.outputContextId]);
+              }
+            }
           }
-        }
 
         for (const task of group) {
           readyTasks.delete(task.id);
@@ -162,7 +168,7 @@ export class PlanTaskRunner {
     const startTime = Date.now();
 
     try {
-      const output = await this.executor.execute({
+      const execOutput = await this.executor.execute({
         taskId: task.id,
         tag: task.tag,
         payload: task.payload,
@@ -173,10 +179,8 @@ export class PlanTaskRunner {
         taskId: task.id,
         tag: task.tag,
         status: "success",
-        output,
-        outputContextId: typeof output === "object" && output !== null
-          ? (output as { contextId?: string }).contextId as string | undefined
-          : undefined,
+        output: execOutput.output,
+        outputContextId: execOutput.outputContextId,
         durationMs: Date.now() - startTime,
         executedAt: new Date().toISOString(),
       };
@@ -198,7 +202,7 @@ interface PlanTaskRunnerOptions {
 }
 
 interface TaskExecutor {
-  execute(request: TaskExecutionRequest): Promise<unknown>;
+  execute(request: TaskExecutionRequest): Promise<TaskExecutionOutput>;
 }
 
 interface TaskExecutionRequest {
@@ -208,12 +212,17 @@ interface TaskExecutionRequest {
   contextIds: string[];
 }
 
+interface TaskExecutionOutput {
+  output: unknown;
+  outputContextId?: string;
+}
+
 class DefaultTaskExecutor implements TaskExecutor {
-  async execute(request: TaskExecutionRequest): Promise<unknown> {
+  async execute(request: TaskExecutionRequest): Promise<TaskExecutionOutput> {
     throw new Error(`No executor configured for task: ${request.tag}`);
   }
 }
 
 // Re-export for backward compatibility
 export { PlanTaskRunner as TaskRunner };
-export type { PlanTaskRunnerOptions as TaskRunnerOptions };
+export type { PlanTaskRunnerOptions as TaskRunnerOptions, TaskExecutor, TaskExecutionRequest, TaskExecutionOutput };
