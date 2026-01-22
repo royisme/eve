@@ -7,10 +7,11 @@ import {
   setPrimaryAccount,
   removeAccount,
   ensureAccountsInitialized,
+  updateAccountAuth,
 } from "../capabilities/email/services/account-service";
-import { checkGogAuth } from "../capabilities/email/services/email-service";
+import { checkGogAuth, getFullAuthStatus, initiateGogAuth } from "../capabilities/email/services/email-service";
 
-type ConfigSection = "authentication" | "providers" | "models" | "view" | "done";
+type ConfigSection = "authentication" | "providers" | "email" | "models" | "view" | "done";
 
 const OAUTH_PROVIDERS = [
   { key: "anthropic", name: "Anthropic", method: "OAuth" },
@@ -64,6 +65,11 @@ export async function interactiveConfigure(): Promise<void> {
           hint: "Configure default models",
         },
         {
+          value: "email" as const,
+          label: "📧 Gmail Accounts",
+          hint: accounts.length > 0 ? `${accounts.length} accounts` : "none configured",
+        },
+        {
           value: "view" as const,
           label: "📊 View Current Config",
         },
@@ -85,6 +91,9 @@ export async function interactiveConfigure(): Promise<void> {
         break;
       case "providers":
         await handleProviders();
+        break;
+      case "email":
+        await handleEmailAccounts();
         break;
       case "view":
         await showConfig();
@@ -117,6 +126,181 @@ async function handleAuthentication(): Promise<void> {
       await removeCredentials();
       break;
   }
+}
+
+async function handleEmailAccounts(): Promise<void> {
+  await ensureAccountsInitialized();
+
+  const action = await p.select({
+    message: "Gmail Accounts",
+    options: [
+      { value: "add", label: "➕ Add Gmail account" },
+      { value: "list", label: "📋 List accounts" },
+      { value: "set_primary", label: "⭐ Set primary account" },
+      { value: "remove", label: "🗑️  Remove account" },
+      { value: "back", label: "← Back" },
+    ],
+  });
+
+  if (isCancel(action) || action === "back") return;
+
+  switch (action) {
+    case "add":
+      await addEmailAccount();
+      break;
+    case "list":
+      await listEmailAccounts();
+      break;
+    case "set_primary":
+      await setPrimaryEmailAccount();
+      break;
+    case "remove":
+      await removeEmailAccount();
+      break;
+  }
+}
+
+async function addEmailAccount(): Promise<void> {
+  const email = await p.text({
+    message: "Gmail address",
+    placeholder: "your@gmail.com",
+    validate: (value) => (value.includes("@") ? undefined : "Please enter a valid email"),
+  });
+
+  if (isCancel(email)) return;
+
+  const alias = await p.text({
+    message: "Alias (optional)",
+    placeholder: "Work, Personal",
+  });
+
+  if (isCancel(alias)) return;
+
+  const isPrimary = await p.confirm({
+    message: "Set as primary account?",
+  });
+
+  if (isCancel(isPrimary)) return;
+
+  const aliasValue = (alias as string).trim();
+
+  await addAccount(email as string, {
+    alias: aliasValue ? aliasValue : undefined,
+    isPrimary: isPrimary as boolean,
+  });
+
+  p.log.success(`Added ${email}${aliasValue ? ` (${aliasValue})` : ""}`);
+
+  const authorizeNow = await p.confirm({
+    message: "Authorize this account now via Gmail OAuth?",
+  });
+
+  if (isCancel(authorizeNow) || !authorizeNow) return;
+
+  const result = await initiateGogAuth(email as string);
+
+  if (result.success && result.authUrl) {
+    p.note(result.authUrl, "Open this URL to authorize");
+    const completed = await p.confirm({
+      message: "Press Enter after completing authorization",
+    });
+    if (!isCancel(completed) && completed) {
+      const authorized = await checkGogAuth(email as string);
+      if (authorized) {
+        await updateAccountAuth(email as string, true);
+        p.log.success(`Authorized ${email}`);
+      } else {
+        p.log.warn("Authorization not detected. You can retry with `eve email:setup`. ");
+      }
+    }
+    return;
+  }
+
+  if (result.success) {
+    await updateAccountAuth(email as string, true);
+    p.log.success(result.message);
+    return;
+  }
+
+  p.log.warn(result.message);
+}
+
+async function listEmailAccounts(): Promise<void> {
+  const status = await getFullAuthStatus();
+
+  if (!status.installed) {
+    p.note("gog CLI not installed. Install: https://github.com/pdfinn/gog", "Gmail Status");
+    return;
+  }
+
+  if (status.accounts.length === 0) {
+    p.note("No accounts configured. Use 'Add Gmail account' to get started.", "Gmail Status");
+    return;
+  }
+
+  const lines = status.accounts.map((acc) => {
+    const primary = acc.isPrimary ? "⭐" : "";
+    const auth = acc.authorized ? "✅" : "⚠️";
+    const alias = acc.alias ? ` (${acc.alias})` : "";
+    const lastSync = acc.lastSyncAt ? ` last sync: ${acc.lastSyncAt}` : "";
+    return `${primary}${auth} ${acc.email}${alias}${lastSync}`;
+  });
+
+  p.note(lines.join("\n"), "Gmail Accounts");
+}
+
+async function setPrimaryEmailAccount(): Promise<void> {
+  const accounts = await listAccounts();
+  if (accounts.length === 0) {
+    p.log.warn("No accounts configured.");
+    return;
+  }
+
+  const selection = await p.select({
+    message: "Select primary account",
+    options: [
+      ...accounts.map((acc) => ({
+        value: acc.email,
+        label: `${acc.email}${acc.alias ? ` (${acc.alias})` : ""}`,
+      })),
+      { value: "back", label: "← Back" },
+    ],
+  });
+
+  if (isCancel(selection) || selection === "back") return;
+
+  await setPrimaryAccount(selection as string);
+  p.log.success(`Primary account set to ${selection}`);
+}
+
+async function removeEmailAccount(): Promise<void> {
+  const accounts = await listAccounts();
+  if (accounts.length === 0) {
+    p.log.warn("No accounts configured.");
+    return;
+  }
+
+  const selection = await p.select({
+    message: "Select account to remove",
+    options: [
+      ...accounts.map((acc) => ({
+        value: acc.email,
+        label: `${acc.email}${acc.alias ? ` (${acc.alias})` : ""}`,
+      })),
+      { value: "back", label: "← Back" },
+    ],
+  });
+
+  if (isCancel(selection) || selection === "back") return;
+
+  const confirm = await p.confirm({
+    message: `Remove ${selection}?`,
+  });
+
+  if (isCancel(confirm) || !confirm) return;
+
+  await removeAccount(selection as string);
+  p.log.success(`Removed ${selection}`);
 }
 
 async function addCredentials(): Promise<void> {

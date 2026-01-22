@@ -10,7 +10,7 @@ import { authMiddleware, validateToken } from "./core/auth";
 import * as jobsApi from "./core/jobs-api";
 import * as resumeApi from "./core/resume-api";
 import * as tailorApi from "./core/tailor-api";
-import { syncEmails } from "./capabilities/email/services/email-service";
+import { syncEmails, getFullAuthStatus } from "./capabilities/email/services/email-service";
 import { Scheduler } from "./core/scheduler";
 import { getFunnelMetrics } from "./capabilities/analytics/services/funnel";
 import { getSkillsAnalytics } from "./capabilities/analytics/services/skills";
@@ -107,6 +107,11 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
         tools: cap.tools.map(t => t.name)
       })),
     });
+  });
+
+  protectedApp.get("/email/status", async (c: Context) => {
+    const status = await getFullAuthStatus();
+    return c.json(status);
   });
 
   protectedApp.post("/chat", async (c: Context) => {

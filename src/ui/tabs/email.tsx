@@ -46,7 +46,10 @@ export class EmailTab extends Container {
         status.accounts.forEach((acc) => {
           const icon = acc.authorized ? "✓" : "✗";
           const color = acc.authorized ? "\x1b[32m" : "\x1b[31m";
-          output += `  ${color}${icon} ${acc.email}\x1b[0m\n`;
+          const primary = acc.isPrimary ? "★ " : "";
+          const alias = acc.alias ? ` (${acc.alias})` : "";
+          const lastSync = acc.lastSyncAt ? ` [last sync: ${acc.lastSyncAt}]` : "";
+          output += `  ${color}${primary}${icon} ${acc.email}${alias}${lastSync}\x1b[0m\n`;
         });
       }
     }

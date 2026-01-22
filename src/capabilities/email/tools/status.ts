@@ -1,6 +1,7 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { getFullAuthStatus, initiateGogAuth, addConfiguredAccount } from "../services/email-service";
+import { getFullAuthStatus, initiateGogAuth } from "../services/email-service";
+import { addAccount, updateAccountAuth } from "../services/account-service";
 
 export const emailStatusTool: AgentTool<any, any> = {
   name: "email_status",
@@ -28,7 +29,10 @@ export const emailStatusTool: AgentTool<any, any> = {
         summary += "Configured accounts:\n";
         for (const acc of status.accounts) {
           const authIcon = acc.authorized ? "✅" : "❌";
-          summary += `- ${authIcon} ${acc.email} (${acc.authorized ? "authorized" : "needs authorization"})\n`;
+          const primary = acc.isPrimary ? "⭐" : "";
+          const alias = acc.alias ? ` (${acc.alias})` : "";
+          const lastSync = acc.lastSyncAt ? ` last sync: ${acc.lastSyncAt}` : "";
+          summary += `- ${primary}${authIcon} ${acc.email}${alias} (${acc.authorized ? "authorized" : "needs authorization"})${lastSync}\n`;
         }
       }
     }
@@ -65,7 +69,7 @@ export const emailSetupTool: AgentTool<any, any> = {
     const result = await initiateGogAuth(email);
 
     if (result.success && result.authUrl) {
-      await addConfiguredAccount(email);
+      await addAccount(email);
       return {
         content: [{ 
           type: "text", 
@@ -80,7 +84,8 @@ export const emailSetupTool: AgentTool<any, any> = {
     }
 
     if (result.success) {
-      await addConfiguredAccount(email);
+      await addAccount(email, { isAuthorized: true });
+      await updateAccountAuth(email, true);
       return {
         content: [{ type: "text", text: `✅ ${result.message}` }],
         details: { status: "authorized", email },
