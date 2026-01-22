@@ -185,11 +185,12 @@ async function addApiKey(): Promise<void> {
 
   if (isCancel(apiKey)) return;
 
+  const apiKeyValue = (apiKey as string).trim();
   const authStore = AuthStore.getInstance();
   authStore.setProfile(`${provider}:api-key`, {
     type: "api_key",
     provider: provider as "openai" | "anthropic" | "google" | "openrouter",
-    api_key: apiKey as string,
+    api_key: apiKeyValue,
   });
 
   p.log.success(`${providerMeta.name} API key saved!`);
@@ -294,6 +295,12 @@ async function showConfig(): Promise<void> {
     for (const { profile } of profiles) {
       if (profile.type === "api_key") {
         lines.push(`  ✅ ${profile.provider}: API Key (${maskApiKey(profile.api_key)})`);
+      } else if (profile.type === "oauth") {
+        const status = profile.access ? "✅" : "⚠️";
+        const expires = profile.expires
+          ? `expires ${new Date(profile.expires).toLocaleDateString()}`
+          : "";
+        lines.push(`  ${status} ${profile.provider}: OAuth ${expires}`);
       }
     }
   }
