@@ -25,6 +25,8 @@ export class JobsChatSession {
   private toolInvocations: ToolInvocation[] = [];
 
   private persistInterval: ReturnType<typeof setInterval> | null = null;
+  private eventQueue: Array<{ event: AgentEvent; adapter: AISDKStreamAdapter }> = [];
+  private isProcessingQueue = false;
 
   constructor(request: JobsChatRequest) {
     this.request = request;
@@ -69,10 +71,16 @@ export class JobsChatSession {
       this.startPeriodicPersist();
 
       const unsubscribe = this.agent.subscribe((event: unknown) => {
-        this.handleAgentEvent(event as AgentEvent, adapter);
+        this.enqueueEvent(event as AgentEvent, adapter);
+      });
+
+      this.abortController.signal.addEventListener("abort", () => {
+        this.agent?.abort();
       });
 
       await this.agent.prompt(prompt);
+
+      await this.drainEventQueue();
 
       unsubscribe();
 
@@ -131,7 +139,7 @@ export class JobsChatSession {
   }
 
   private async persistMessage(finishReason: "stop" | "error"): Promise<void> {
-    await JobsChatHistory.save(this.conversationId, {
+    await JobsChatHistory.upsert(this.conversationId, {
       id: this.messageId,
       role: "assistant",
       content: this.textContent,
@@ -189,12 +197,12 @@ export class JobsChatSession {
         await this.handleMessageUpdate(event as MessageUpdateEvent, adapter);
         break;
 
-      case "tool_call_start":
-        await this.handleToolCallStart(event as ToolCallStartEvent, adapter);
+      case "tool_execution_start":
+        await this.handleToolExecutionStart(event as ToolExecutionStartEvent, adapter);
         break;
 
-      case "tool_call_result":
-        await this.handleToolCallResult(event as ToolCallResultEvent, adapter);
+      case "tool_execution_end":
+        await this.handleToolExecutionEnd(event as ToolExecutionEndEvent, adapter);
         break;
     }
   }
@@ -230,8 +238,8 @@ export class JobsChatSession {
     }
   }
 
-  private async handleToolCallStart(
-    event: ToolCallStartEvent,
+  private async handleToolExecutionStart(
+    event: ToolExecutionStartEvent,
     adapter: AISDKStreamAdapter
   ): Promise<void> {
     if (adapter.isTextOpen) {
@@ -246,42 +254,74 @@ export class JobsChatSession {
     const invocation: ToolInvocation = {
       toolCallId: event.toolCallId,
       toolName: event.toolName,
-      args: event.arguments ?? {},
+      args: (event.args ?? {}) as Record<string, unknown>,
       state: "running",
     };
     this.toolInvocations.push(invocation);
 
-    await adapter.sendToolCallStart(event.toolCallId, event.toolName, event.arguments ?? {});
+    await adapter.sendToolCallStart(event.toolCallId, event.toolName, (event.args ?? {}) as Record<string, unknown>);
   }
 
-  private async handleToolCallResult(
-    event: ToolCallResultEvent,
+  private async handleToolExecutionEnd(
+    event: ToolExecutionEndEvent,
     adapter: AISDKStreamAdapter
   ): Promise<void> {
-    const { toolCallId, result, error } = event;
+    const { toolCallId, result, isError } = event;
 
     const invocation = this.toolInvocations.find((t) => t.toolCallId === toolCallId);
     if (invocation) {
-      invocation.state = error ? "error" : "result";
-      invocation.result = error ? `Error: ${error.message}` : this.extractResultText(result);
+      invocation.state = isError ? "error" : "result";
+      invocation.result = isError ? `Error: ${String(result)}` : this.extractResultText(result);
     }
 
-    if (error) {
-      await adapter.sendToolCallResult(toolCallId, `Error: ${error.message}`, true);
+    if (isError) {
+      await adapter.sendToolCallResult(toolCallId, `Error: ${String(result)}`, true);
     } else {
       const resultText = this.extractResultText(result);
       await adapter.sendToolCallResult(toolCallId, resultText, false);
     }
   }
 
-  private extractResultText(result?: ToolResult): string {
-    if (result?.content && result.content.length > 0) {
-      const textContent = result.content.find((c: ContentBlock) => c.type === "text");
-      if (textContent && "text" in textContent) {
-        return textContent.text as string;
+  private extractResultText(result?: unknown): string {
+    if (result && typeof result === "object" && "content" in result) {
+      const content = (result as { content?: Array<{ type: string; text?: string }> }).content;
+      if (content && Array.isArray(content) && content.length > 0) {
+        const textContent = content.find((c) => c.type === "text");
+        if (textContent && "text" in textContent && typeof textContent.text === "string") {
+          return textContent.text;
+        }
       }
     }
     return "Tool executed successfully";
+  }
+
+  private enqueueEvent(event: AgentEvent, adapter: AISDKStreamAdapter): void {
+    this.eventQueue.push({ event, adapter });
+    this.processEventQueue();
+  }
+
+  private async processEventQueue(): Promise<void> {
+    if (this.isProcessingQueue) return;
+    this.isProcessingQueue = true;
+
+    while (this.eventQueue.length > 0) {
+      const item = this.eventQueue.shift();
+      if (!item) break;
+
+      try {
+        await this.handleAgentEvent(item.event, item.adapter);
+      } catch (error) {
+        console.error("[JobsChatSession] Event processing error:", error);
+      }
+    }
+
+    this.isProcessingQueue = false;
+  }
+
+  private async drainEventQueue(): Promise<void> {
+    while (this.eventQueue.length > 0 || this.isProcessingQueue) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
   }
 }
 
@@ -293,9 +333,9 @@ interface AgentEvent {
   };
   toolCallId?: string;
   toolName?: string;
-  arguments?: Record<string, unknown>;
-  result?: ToolResult;
-  error?: { message: string };
+  args?: unknown;
+  result?: unknown;
+  isError?: boolean;
 }
 
 interface MessageUpdateEvent {
@@ -306,25 +346,17 @@ interface MessageUpdateEvent {
   };
 }
 
-interface ToolCallStartEvent {
-  type: "tool_call_start";
+interface ToolExecutionStartEvent {
+  type: "tool_execution_start";
   toolCallId: string;
   toolName: string;
-  arguments?: Record<string, unknown>;
+  args: unknown;
 }
 
-interface ToolCallResultEvent {
-  type: "tool_call_result";
+interface ToolExecutionEndEvent {
+  type: "tool_execution_end";
   toolCallId: string;
-  result?: ToolResult;
-  error?: { message: string };
-}
-
-interface ToolResult {
-  content?: ContentBlock[];
-}
-
-interface ContentBlock {
-  type: string;
-  text?: string;
+  toolName: string;
+  result: unknown;
+  isError: boolean;
 }

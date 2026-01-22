@@ -1,10 +1,10 @@
 export interface JobsChatRequest {
-  messages: ChatMessage[];
+  messages: JobsChatMessage[];
   context?: JobsContext;
   options?: ChatOptions;
 }
 
-export interface ChatMessage {
+export interface JobsChatMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
@@ -173,8 +173,8 @@ export interface JobsChatResponse {
   toolCalls?: ToolInvocation[];
   finishReason: FinishReason;
   usage?: {
-    promptTokens: number;
-    completionTokens: number;
+    inputTokens: number;
+    outputTokens: number;
   };
 }
 
@@ -195,7 +195,7 @@ export interface StoredMessage {
   timestamp: string;
   finishReason?: FinishReason;
   usage?: {
-    promptTokens: number;
-    completionTokens: number;
+    inputTokens: number;
+    outputTokens: number;
   };
 }

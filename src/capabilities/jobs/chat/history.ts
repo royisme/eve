@@ -20,7 +20,7 @@ export interface MessageRecord {
   toolCalls?: ToolInvocation[];
   timestamp: string;
   finishReason?: FinishReason;
-  usage?: { promptTokens: number; completionTokens: number };
+  usage?: { inputTokens: number; outputTokens: number };
 }
 
 export class JobsChatHistory {
