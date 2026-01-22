@@ -65,10 +65,16 @@ export async function getFullAuthStatus(): Promise<GogAuthStatus> {
   
   const accounts: AccountStatus[] = [];
   for (const account of configuredAccounts) {
-    const authorized = gogStatus.installed ? await checkGogAuth(account.email) : false;
-    if (authorized !== account.isAuthorized) {
-      await updateAccountAuth(account.email, authorized);
+    let authorized = account.isAuthorized; // Use stored value as default
+    
+    // Only verify and update auth status when gog is installed
+    if (gogStatus.installed) {
+      authorized = await checkGogAuth(account.email);
+      if (authorized !== account.isAuthorized) {
+        await updateAccountAuth(account.email, authorized);
+      }
     }
+    
     accounts.push({
       email: account.email,
       configured: true,
