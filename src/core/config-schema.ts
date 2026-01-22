@@ -5,10 +5,9 @@ import { Type, type Static } from "@sinclair/typebox";
  * Single source of truth for eve.json structure
  */
 
-// Provider configuration
+// Provider configuration (no auth - credentials stored in auth.json)
 const ProviderConfigSchema = Type.Object(
   {
-    api_key: Type.Optional(Type.String()),
     base_url: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     timeout_ms: Type.Optional(Type.Integer({ default: 30000, minimum: 0 })),
     rate_limit: Type.Optional(
@@ -19,7 +18,7 @@ const ProviderConfigSchema = Type.Object(
     ),
   },
   {
-    description: "Provider configuration - must have at least api_key or base_url",
+    description: "Provider configuration (base_url, timeout, rate limits)",
   }
 );
 

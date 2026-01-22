@@ -10,6 +10,7 @@ Eve - AI Personal Agent Platform
 Commands:
   (no args)          Launch TUI dashboard
   serve              Start HTTP server (default port: 3033)
+  configure          Configure providers, accounts, and settings
   email:status       Check email configuration
   email:sync         Sync emails from Gmail
   jobs:list          List job opportunities
@@ -40,6 +41,7 @@ if (args.length === 0) {
     console.log("Commands:");
     console.log("  (no args)      Launch TUI dashboard");
     console.log("  serve          Start HTTP API server");
+    console.log("  configure      Configure providers and accounts");
     console.log("  email:status   Check email configuration");
     console.log("  email:sync     Sync emails from Gmail");
     console.log("  jobs:list      List job opportunities");

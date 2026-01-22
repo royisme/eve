@@ -73,6 +73,16 @@ cli
   });
 
 cli
+  .command("configure", "Configure Eve providers, accounts, and settings")
+  .action(async () => {
+    const { bootstrap } = await import("../core/bootstrap");
+    await bootstrap();
+    
+    const { interactiveConfigure } = await import("./configure");
+    await interactiveConfigure();
+  });
+
+cli
   .command("scheduler:start", "Start the Gateway scheduler daemon")
   .action(async () => {
     const { bootstrap } = await import("../core/bootstrap");
