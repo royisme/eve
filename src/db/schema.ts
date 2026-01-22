@@ -153,3 +153,34 @@ export type CronRun = typeof cronRuns.$inferSelect;
 export type NewCronRun = typeof cronRuns.$inferInsert;
 export type EmailAccount = typeof emailAccounts.$inferSelect;
 export type NewEmailAccount = typeof emailAccounts.$inferInsert;
+
+export const conversations = sqliteTable('conversations', {
+  id: text('id').primaryKey(),
+  agentId: text('agent_id').notNull(),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+  metadata: text('metadata'),
+}, (table) => [
+  index('idx_conversations_agent').on(table.agentId),
+]);
+
+export const chatMessages = sqliteTable('chat_messages', {
+  id: text('id').primaryKey(),
+  conversationId: text('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(),
+  content: text('content').notNull(),
+  reasoning: text('reasoning'),
+  toolCalls: text('tool_calls'),
+  timestamp: text('timestamp').notNull(),
+  finishReason: text('finish_reason'),
+  usage: text('usage'),
+  createdAt: text('created_at').notNull(),
+}, (table) => [
+  index('idx_messages_conversation').on(table.conversationId),
+  index('idx_messages_timestamp').on(table.timestamp),
+]);
+
+export type Conversation = typeof conversations.$inferSelect;
+export type NewConversation = typeof conversations.$inferInsert;
+export type ChatMessage = typeof chatMessages.$inferSelect;
+export type NewChatMessage = typeof chatMessages.$inferInsert;

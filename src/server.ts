@@ -14,6 +14,7 @@ import { syncEmails } from "./capabilities/email/services/email-service";
 import { Scheduler } from "./core/scheduler";
 import { getFunnelMetrics } from "./capabilities/analytics/services/funnel";
 import { getSkillsAnalytics } from "./capabilities/analytics/services/skills";
+import { jobsChat } from "./capabilities/jobs/chat";
 import "./core/scheduler-executors";
 
 const DEFAULT_PORT = 3033;
@@ -398,6 +399,8 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
 
   // Mount protected routes
   app.route("/", protectedApp);
+
+  protectedApp.route("/jobs/chat", jobsChat);
   
   app.get("/api/scheduler/status", async (c: Context) => {
     return c.json(await Scheduler.getStatus());
@@ -415,7 +418,7 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
   });
 
   console.log(`🔌 Eve HTTP API listening on http://localhost:${port}`);
-  console.log(`   Endpoints: /health, /agent/status, /chat, /ingest, /jobs, /jobs/:id/analysis, /resumes, /tailor`);
+  console.log(`   Endpoints: /health, /agent/status, /chat, /jobs/chat, /ingest, /jobs, /resumes, /tailor`);
   const schedulerStatus = await Scheduler.getStatus();
   console.log(`📅 Gateway Scheduler: ${schedulerStatus.jobCount} jobs active`);
 
