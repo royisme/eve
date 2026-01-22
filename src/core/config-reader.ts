@@ -9,13 +9,7 @@ import { ModelResolver } from "./model-resolver";
 const CONFIG_FILE = "eve.json";
 
 const DEFAULT_CONFIG: EveConfig = {
-  providers: {
-    anthropic: {
-      api_key: process.env.ANTHROPIC_API_KEY || "YOUR_API_KEY_HERE",
-      base_url: null,
-      timeout_ms: 30000,
-    },
-  },
+  providers: {},
   models: {
     fast: { provider: "anthropic", model: "claude-3-5-haiku-20241022" },
     smart: { provider: "anthropic", model: "claude-3-5-sonnet-20241022" },
@@ -59,18 +53,21 @@ export class ConfigReader {
   private static providerRegistry: ProviderRegistry | null = null;
   private static modelResolver: ModelResolver | null = null;
 
+  static getConfigPath(): string {
+    return join(getDataDir(), CONFIG_FILE);
+  }
+
   static load(): EveConfig {
     if (this.config) {
       return this.config;
     }
 
-    const configPath = join(getDataDir(), CONFIG_FILE);
+    const configPath = this.getConfigPath();
 
     if (!existsSync(configPath)) {
       console.log(`📝 Config file not found. Creating default config at ${configPath}`);
       this.createDefaultConfig(configPath);
-      console.log(`⚠️  Please edit ${configPath} and add your API keys before continuing.`);
-      console.log(`   Required: providers.anthropic.api_key`);
+      console.log(`⚠️  Run 'eve configure' to set up your providers and API keys.`);
     }
 
     let rawConfig: unknown;
@@ -94,13 +91,8 @@ export class ConfigReader {
 
     const config = rawConfig as EveConfig;
 
-    for (const [providerName, providerConfig] of Object.entries(config.providers)) {
-      if (!providerConfig.api_key && !providerConfig.base_url) {
-        console.error(`❌ Invalid provider config in ${configPath}:`);
-        console.error(`  - providers.${providerName}: must have at least 'api_key' or 'base_url'`);
-        process.exit(1);
-      }
-    }
+    // Skip provider validation - providers can be empty initially
+    // Validation happens when actually using the provider
 
     this.config = config;
     this.providerRegistry = new ProviderRegistry(config);
@@ -139,5 +131,23 @@ export class ConfigReader {
 
   private static createDefaultConfig(configPath: string): void {
     writeFileSync(configPath, JSON.stringify(DEFAULT_CONFIG, null, 2), "utf-8");
+  }
+
+  static save(config: EveConfig): void {
+    const configPath = this.getConfigPath();
+    writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
+    this.config = config;
+    this.providerRegistry = new ProviderRegistry(config);
+    this.modelResolver = new ModelResolver(config, this.providerRegistry);
+  }
+
+  static hasProvider(name: string): boolean {
+    const config = this.get();
+    return name in config.providers;
+  }
+
+  static getProviderNames(): string[] {
+    const config = this.get();
+    return Object.keys(config.providers);
   }
 }

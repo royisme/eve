@@ -3,7 +3,7 @@ import { getModel } from "@mariozechner/pi-ai";
 import { getCapabilityTools, getCapabilities } from "../capabilities";
 import type { CapabilityContext } from "../capabilities/types";
 import { ConfigManager } from "./config";
-import { ConfigReader } from "./config-reader";
+import { AuthStore } from "./auth-store";
 import { db } from "../db";
 import { getContextStore } from "./context";
 import { getMemoryManager } from "./memory";
@@ -21,37 +21,22 @@ Be proactive, professional, and efficient. Always aim to complete tasks fully.`;
 const DEFAULT_PROVIDER = "anthropic";
 const DEFAULT_MODEL = "claude-3-5-sonnet-20241022";
 
-const ENV_KEYS: Record<string, string[]> = {
-  anthropic: ["ANTHROPIC_API_KEY", "ANTHROPIC_OAUTH_TOKEN"],
-  google: ["GOOGLE_API_KEY"],
-  openai: ["OPENAI_API_KEY"],
-};
+async function getApiKey(provider: string): Promise<string | undefined> {
+  // 1. Try auth.json (primary source)
+  const authStore = AuthStore.getInstance();
+  const fromAuth = authStore.getApiKey(provider.toLowerCase());
+  if (fromAuth) return fromAuth;
 
-function getApiKeyFromRegistry(provider: string): string | undefined {
-  try {
-    const registry = ConfigReader.getProviderRegistry();
-    if (registry.hasProvider(provider)) {
-      const config = registry.getProvider(provider);
-      if (config.api_key) return config.api_key;
-    }
-  } catch {
-    // Fallthrough to env vars
-  }
+  // 2. Try environment variables (fallback)
+  const envKeys: Record<string, string[]> = {
+    anthropic: ["ANTHROPIC_API_KEY"],
+    openai: ["OPENAI_API_KEY"],
+    google: ["GOOGLE_API_KEY"],
+  };
 
-  for (const envKey of ENV_KEYS[provider.toLowerCase()] || []) {
+  for (const envKey of envKeys[provider.toLowerCase()] || []) {
     if (process.env[envKey]) return process.env[envKey];
   }
-
-  return undefined;
-}
-
-async function getApiKey(provider: string): Promise<string | undefined> {
-  const fromRegistry = getApiKeyFromRegistry(provider);
-  if (fromRegistry) return fromRegistry;
-
-  const configPath = `services.${provider.toLowerCase()}.api_key`;
-  const apiKey = await ConfigManager.get<string>(configPath);
-  if (apiKey) return apiKey;
 
   return undefined;
 }

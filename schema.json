@@ -12,12 +12,9 @@
       "type": "object",
       "patternProperties": {
         "^(.*)$": {
-          "description": "Provider configuration - must have at least api_key or base_url",
+          "description": "Provider configuration (base_url, timeout, rate limits)",
           "type": "object",
           "properties": {
-            "api_key": {
-              "type": "string"
-            },
             "base_url": {
               "anyOf": [
                 {
