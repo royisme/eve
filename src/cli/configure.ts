@@ -188,7 +188,7 @@ async function addApiKey(): Promise<void> {
   const authStore = AuthStore.getInstance();
   authStore.setProfile(`${provider}:api-key`, {
     type: "api_key",
-    provider: provider as "openai" | "anthropic" | "google",
+    provider: provider as "openai" | "anthropic" | "google" | "openrouter",
     api_key: apiKey as string,
   });
 

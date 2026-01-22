@@ -75,6 +75,11 @@ cli
 cli
   .command("configure", "Configure Eve providers, accounts, and settings")
   .action(async () => {
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+      console.error("❌ The configure wizard requires an interactive TTY.");
+      process.exit(1);
+    }
+    
     const { bootstrap } = await import("../core/bootstrap");
     await bootstrap();
     
