@@ -62,7 +62,7 @@ export class JobsChatSession {
         showThinking: this.request.options?.showThinking !== false,
       });
 
-      await adapter.sendStart(this.messageId);
+      await adapter.sendMessageStart(this.messageId);
 
       const prompt = this.buildPrompt();
 
@@ -83,15 +83,18 @@ export class JobsChatSession {
         await adapter.sendReasoningEnd();
       }
 
-      await adapter.sendFinish("stop");
+      await adapter.sendMessageEnd(this.messageId, "stop");
 
       await this.persistMessage("stop");
     } catch (error) {
       if (this.abortController.signal.aborted) {
-        await adapter.sendFinish("stop");
+        await adapter.sendMessageEnd(this.messageId, "stop");
         await this.persistMessage("stop");
       } else {
-        await adapter.sendError(error instanceof Error ? error.message : "Unknown error");
+        await adapter.sendError(
+          "internal_error",
+          error instanceof Error ? error.message : "Unknown error"
+        );
         await this.persistMessage("error");
       }
     } finally {
@@ -248,7 +251,7 @@ export class JobsChatSession {
     };
     this.toolInvocations.push(invocation);
 
-    await adapter.sendToolCall(event.toolCallId, event.toolName, event.arguments ?? {});
+    await adapter.sendToolCallStart(event.toolCallId, event.toolName, event.arguments ?? {});
   }
 
   private async handleToolCallResult(
@@ -264,10 +267,10 @@ export class JobsChatSession {
     }
 
     if (error) {
-      await adapter.sendToolResult(toolCallId, `Error: ${error.message}`);
+      await adapter.sendToolCallResult(toolCallId, `Error: ${error.message}`, true);
     } else {
       const resultText = this.extractResultText(result);
-      await adapter.sendToolResult(toolCallId, resultText);
+      await adapter.sendToolCallResult(toolCallId, resultText, false);
     }
   }
 

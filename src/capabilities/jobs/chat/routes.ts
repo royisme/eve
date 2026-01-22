@@ -29,6 +29,7 @@ jobsChat.post("/", async (c: Context) => {
       await session.run(adapter);
     } catch (error) {
       await adapter.sendError(
+        "internal_error",
         error instanceof Error ? error.message : "Unknown error"
       );
       adapter.close();

@@ -33,100 +33,135 @@ export interface ChatOptions {
 }
 
 export type AISDKEventType =
-  | "start"
+  | "message-start"
   | "reasoning-start"
   | "reasoning-delta"
   | "reasoning-end"
   | "text-start"
   | "text-delta"
   | "text-end"
-  | "tool-call"
-  | "tool-result"
-  | "finish"
+  | "tool-call-start"
+  | "tool-call-delta"
+  | "tool-call-result"
+  | "message-end"
   | "error"
   | "ping";
 
-export interface StartEvent {
-  type: "start";
+export interface MessageStartEvent {
+  id: string; // Unique event ID
+  type: "message-start";
   messageId: string;
+  role: "assistant";
+  timestamp: string;
 }
 
 export interface ReasoningStartEvent {
+  id: string; // Unique event ID
   type: "reasoning-start";
-  id: string;
+  reasoningId: string;
 }
 
 export interface ReasoningDeltaEvent {
+  id: string; // Unique event ID
   type: "reasoning-delta";
-  id: string;
+  reasoningId: string;
   delta: string;
 }
 
 export interface ReasoningEndEvent {
+  id: string; // Unique event ID
   type: "reasoning-end";
-  id: string;
+  reasoningId: string;
+  content: string;
 }
 
 export interface TextStartEvent {
+  id: string; // Unique event ID
   type: "text-start";
-  id: string;
+  textId: string;
 }
 
 export interface TextDeltaEvent {
+  id: string; // Unique event ID
   type: "text-delta";
-  id: string;
+  textId: string;
   delta: string;
 }
 
 export interface TextEndEvent {
+  id: string; // Unique event ID
   type: "text-end";
-  id: string;
+  textId: string;
+  content: string;
 }
 
-export interface ToolCallEvent {
-  type: "tool-call";
+export interface ToolCallStartEvent {
+  id: string; // Unique event ID
+  type: "tool-call-start";
   toolCallId: string;
   toolName: string;
-  args: Record<string, unknown>;
+  arguments: Record<string, unknown>;
 }
 
-export interface ToolResultEvent {
-  type: "tool-result";
+export interface ToolCallDeltaEvent {
+  id: string; // Unique event ID
+  type: "tool-call-delta";
+  toolCallId: string;
+  status: "running";
+  progress?: {
+    current?: number;
+    total?: number;
+    message?: string;
+  };
+}
+
+export interface ToolCallResultEvent {
+  id: string; // Unique event ID
+  type: "tool-call-result";
   toolCallId: string;
   result: string;
+  isError: boolean;
+  data?: Record<string, unknown>;
 }
 
 export type FinishReason = "stop" | "tool-calls" | "length" | "content-filter" | "error";
 
-export interface FinishEvent {
-  type: "finish";
+export interface MessageEndEvent {
+  id: string; // Unique event ID
+  type: "message-end";
+  messageId: string;
   finishReason: FinishReason;
   usage?: {
-    promptTokens: number;
-    completionTokens: number;
+    inputTokens: number;
+    outputTokens: number;
   };
 }
 
 export interface ErrorEvent {
+  id: string; // Unique event ID
   type: "error";
-  error: string;
+  code: string;
+  message: string;
+  retryAfter?: number;
 }
 
 export interface PingEvent {
+  id: string; // Unique event ID
   type: "ping";
 }
 
 export type AISDKEvent =
-  | StartEvent
+  | MessageStartEvent
   | ReasoningStartEvent
   | ReasoningDeltaEvent
   | ReasoningEndEvent
   | TextStartEvent
   | TextDeltaEvent
   | TextEndEvent
-  | ToolCallEvent
-  | ToolResultEvent
-  | FinishEvent
+  | ToolCallStartEvent
+  | ToolCallDeltaEvent
+  | ToolCallResultEvent
+  | MessageEndEvent
   | ErrorEvent
   | PingEvent;
 
