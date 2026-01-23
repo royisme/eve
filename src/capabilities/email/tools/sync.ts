@@ -1,6 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { syncEmails } from "../services/email-service";
+import { syncEmails, NoAuthorizedAccountsError } from "../services/email-service";
 
 export const emailSyncTool: AgentTool<any, any> = {
   name: "email_sync",
@@ -32,7 +32,22 @@ export const emailSyncTool: AgentTool<any, any> = {
         }
       });
 
-      const summary = `✅ Sync complete!\n\n- Emails found: ${result.synced}\n- Jobs saved: ${result.newJobs}\n\nRun 'jobs_list' to see your job opportunities.`;
+      const summaryLines = [
+        "✅ Sync complete!",
+        "",
+        `- Query: ${query}`,
+        `- Max threads: ${maxThreads}`,
+        `- Emails found: ${result.synced}`,
+        `- Jobs saved: ${result.newJobs}`,
+      ];
+
+      if (result.synced === 0) {
+        summaryLines.push("", "No matching emails found. Try adjusting the Gmail query.");
+      }
+
+      summaryLines.push("", "Run 'jobs_list' to see your job opportunities.");
+
+      const summary = summaryLines.join("\n");
 
       return {
         content: [{ type: "text", text: summary }],
@@ -43,9 +58,15 @@ export const emailSyncTool: AgentTool<any, any> = {
         },
       };
     } catch (error) {
+      const isNoAuthError = error instanceof NoAuthorizedAccountsError;
+      const errorCode = isNoAuthError ? error.code : "SYNC_ERROR";
+      const message = error instanceof Error ? error.message : "Unknown error";
+      const guidance = isNoAuthError
+        ? "\n\nRun 'email:setup your@gmail.com' or 'email_accounts_list' to configure Gmail."
+        : "";
       return {
-        content: [{ type: "text", text: `❌ Sync failed: ${(error as Error).message}` }],
-        details: { error: (error as Error).message },
+        content: [{ type: "text", text: `❌ Sync failed: ${message}${guidance}` }],
+        details: { status: "error", errorCode, error: message },
       };
     }
   },

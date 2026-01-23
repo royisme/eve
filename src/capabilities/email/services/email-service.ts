@@ -1,6 +1,12 @@
-import { ConfigManager } from "../../../core/config";
 import { GmailSource } from "../../../core/gmail";
 import { Dispatcher } from "../../../core/dispatcher";
+import {
+  addAccount,
+  ensureAccountsInitialized,
+  listAccounts,
+  removeAccount,
+  updateAccountAuth,
+} from "./account-service";
 
 export interface GogAuthStatus {
   installed: boolean;
@@ -12,6 +18,9 @@ export interface AccountStatus {
   email: string;
   configured: boolean;
   authorized: boolean;
+  isPrimary: boolean;
+  alias?: string | null;
+  lastSyncAt?: string | null;
 }
 
 export async function checkGogInstalled(): Promise<{ installed: boolean; version: string | null }> {
@@ -36,34 +45,43 @@ export async function checkGogAuth(email: string): Promise<boolean> {
 }
 
 export async function getConfiguredAccounts(): Promise<string[]> {
-  return (await ConfigManager.get<string[]>("services.google.accounts", [])) || [];
+  await ensureAccountsInitialized();
+  const accounts = await listAccounts();
+  return accounts.map((account) => account.email);
 }
 
 export async function addConfiguredAccount(email: string): Promise<void> {
-  const accounts = await getConfiguredAccounts();
-  if (!accounts.includes(email)) {
-    accounts.push(email);
-    await ConfigManager.set("services.google.accounts", accounts, "email");
-  }
+  await addAccount(email);
 }
 
 export async function removeConfiguredAccount(email: string): Promise<void> {
-  const accounts = await getConfiguredAccounts();
-  const filtered = accounts.filter(a => a !== email);
-  await ConfigManager.set("services.google.accounts", filtered, "email");
+  await removeAccount(email);
 }
 
 export async function getFullAuthStatus(): Promise<GogAuthStatus> {
   const gogStatus = await checkGogInstalled();
-  const configuredAccounts = await getConfiguredAccounts();
+  await ensureAccountsInitialized();
+  const configuredAccounts = await listAccounts();
   
   const accounts: AccountStatus[] = [];
-  for (const email of configuredAccounts) {
-    const authorized = gogStatus.installed ? await checkGogAuth(email) : false;
+  for (const account of configuredAccounts) {
+    let authorized = account.isAuthorized; // Use stored value as default
+    
+    // Only verify and update auth status when gog is installed
+    if (gogStatus.installed) {
+      authorized = await checkGogAuth(account.email);
+      if (authorized !== account.isAuthorized) {
+        await updateAccountAuth(account.email, authorized);
+      }
+    }
+    
     accounts.push({
-      email,
+      email: account.email,
       configured: true,
       authorized,
+      isPrimary: account.isPrimary,
+      alias: account.alias,
+      lastSyncAt: account.lastSyncAt,
     });
   }
 
@@ -103,7 +121,7 @@ export async function initiateGogAuth(email: string): Promise<{ success: boolean
     }
 
     if (output.includes("already authorized") || output.includes("success")) {
-      await addConfiguredAccount(email);
+      await addAccount(email, { isAuthorized: true });
       return {
         success: true,
         message: `Account ${email} is already authorized.`,
@@ -130,6 +148,19 @@ export interface SyncProgress {
   message?: string;
 }
 
+/**
+ * Custom error for when no authorized Gmail accounts are available.
+ * Use `instanceof NoAuthorizedAccountsError` for stable error identification.
+ */
+export class NoAuthorizedAccountsError extends Error {
+  readonly code = "NO_AUTHORIZED_ACCOUNTS" as const;
+  
+  constructor(message: string = "No authorized Gmail accounts found.") {
+    super(message);
+    this.name = "NoAuthorizedAccountsError";
+  }
+}
+
 export async function syncEmails(
   query: string = "from:linkedin OR from:indeed",
   maxThreads: number = 20,
@@ -139,7 +170,7 @@ export async function syncEmails(
   const authorizedAccounts = status.accounts.filter(a => a.authorized);
   
   if (authorizedAccounts.length === 0) {
-    throw new Error("No authorized Gmail accounts found.");
+    throw new NoAuthorizedAccountsError();
   }
 
   onProgress?.({ status: 'searching' });

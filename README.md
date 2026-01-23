@@ -190,7 +190,7 @@ bun run src/index.ts serve
 bun run src/index.ts
 
 # Build production dist
-npm run build
+bun run build
 
 # Run compiled output
 bun dist/index.js serve
@@ -249,7 +249,7 @@ CI should run:
 
 ```bash
 bun install
-npm run build
+bun run build
 bun dist/index.js --help
 ```
 

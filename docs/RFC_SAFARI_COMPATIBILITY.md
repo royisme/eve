@@ -116,7 +116,7 @@ export default defineConfig({
     "dev:safari": "BUILD_TARGET=safari vite",
     "build": "BUILD_TARGET=chrome vite build",
     "build:safari": "BUILD_TARGET=safari vite build",
-    "build:all": "npm run build && npm run build:safari"
+    "build:all": "bun run build && bun run build:safari"
   }
 }
 ```
