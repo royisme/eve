@@ -148,6 +148,19 @@ export interface SyncProgress {
   message?: string;
 }
 
+/**
+ * Custom error for when no authorized Gmail accounts are available.
+ * Use `instanceof NoAuthorizedAccountsError` for stable error identification.
+ */
+export class NoAuthorizedAccountsError extends Error {
+  readonly code = "NO_AUTHORIZED_ACCOUNTS" as const;
+  
+  constructor(message: string = "No authorized Gmail accounts found.") {
+    super(message);
+    this.name = "NoAuthorizedAccountsError";
+  }
+}
+
 export async function syncEmails(
   query: string = "from:linkedin OR from:indeed",
   maxThreads: number = 20,
@@ -157,7 +170,7 @@ export async function syncEmails(
   const authorizedAccounts = status.accounts.filter(a => a.authorized);
   
   if (authorizedAccounts.length === 0) {
-    throw new Error("No authorized Gmail accounts found.");
+    throw new NoAuthorizedAccountsError();
   }
 
   onProgress?.({ status: 'searching' });

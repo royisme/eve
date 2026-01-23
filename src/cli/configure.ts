@@ -161,13 +161,15 @@ async function handleEmailAccounts(): Promise<void> {
 }
 
 async function addEmailAccount(): Promise<void> {
-  const email = await p.text({
+  const emailInput = await p.text({
     message: "Gmail address",
     placeholder: "your@gmail.com",
-    validate: (value) => (value.includes("@") ? undefined : "Please enter a valid email"),
+    validate: (value) => (value.trim().includes("@") ? undefined : "Please enter a valid email"),
   });
 
-  if (isCancel(email)) return;
+  if (isCancel(emailInput)) return;
+
+  const email = (emailInput as string).trim().toLowerCase();
 
   const alias = await p.text({
     message: "Alias (optional)",
@@ -184,7 +186,7 @@ async function addEmailAccount(): Promise<void> {
 
   const aliasValue = (alias as string).trim();
 
-  await addAccount(email as string, {
+  await addAccount(email, {
     alias: aliasValue ? aliasValue : undefined,
     isPrimary: isPrimary as boolean,
   });
@@ -197,7 +199,7 @@ async function addEmailAccount(): Promise<void> {
 
   if (isCancel(authorizeNow) || !authorizeNow) return;
 
-  const result = await initiateGogAuth(email as string);
+  const result = await initiateGogAuth(email);
 
   if (result.success && result.authUrl) {
     p.note(result.authUrl, "Open this URL to authorize");
@@ -205,9 +207,9 @@ async function addEmailAccount(): Promise<void> {
       message: "Press Enter after completing authorization",
     });
     if (!isCancel(completed) && completed) {
-      const authorized = await checkGogAuth(email as string);
+      const authorized = await checkGogAuth(email);
       if (authorized) {
-        await updateAccountAuth(email as string, true);
+        await updateAccountAuth(email, true);
         p.log.success(`Authorized ${email}`);
       } else {
         p.log.warn("Authorization not detected. You can retry with `eve email:setup`. ");
@@ -217,7 +219,7 @@ async function addEmailAccount(): Promise<void> {
   }
 
   if (result.success) {
-    await updateAccountAuth(email as string, true);
+    await updateAccountAuth(email, true);
     p.log.success(result.message);
     return;
   }

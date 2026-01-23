@@ -114,7 +114,7 @@ bun run src/index.ts serve  # HTTP server
 **Production build (dist):**
 
 ```bash
-npm run build               # tsconfig.build.json -> dist/
+bun run build               # tsconfig.build.json -> dist/
 # output: dist/index.js + dist/** + dist/drizzle/
 
 bun dist/index.js serve     # run compiled output

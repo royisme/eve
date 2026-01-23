@@ -1,6 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { syncEmails } from "../services/email-service";
+import { syncEmails, NoAuthorizedAccountsError } from "../services/email-service";
 
 export const emailSyncTool: AgentTool<any, any> = {
   name: "email_sync",
@@ -58,13 +58,15 @@ export const emailSyncTool: AgentTool<any, any> = {
         },
       };
     } catch (error) {
+      const isNoAuthError = error instanceof NoAuthorizedAccountsError;
+      const errorCode = isNoAuthError ? error.code : "SYNC_ERROR";
       const message = error instanceof Error ? error.message : "Unknown error";
-      const guidance = message.includes("No authorized Gmail accounts")
+      const guidance = isNoAuthError
         ? "\n\nRun 'email:setup your@gmail.com' or 'email_accounts_list' to configure Gmail."
         : "";
       return {
         content: [{ type: "text", text: `❌ Sync failed: ${message}${guidance}` }],
-        details: { error: message },
+        details: { status: "error", errorCode, error: message },
       };
     }
   },
