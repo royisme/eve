@@ -517,6 +517,7 @@ async function handleProviderManagement(): Promise<void> {
         { value: "edit", label: "✏️  Edit Provider", hint: `${providers.length} configured` },
         { value: "remove", label: "🗑️  Remove Provider" },
         { value: "aliases", label: "🎯 Configure Model Aliases" },
+        { value: "set_default", label: "⭐ Set Default Model", hint: config.eve.model },
         { value: "back", label: "← Back" },
       ],
     });
@@ -536,8 +537,36 @@ async function handleProviderManagement(): Promise<void> {
       case "aliases":
         await configureModelAliases();
         break;
+      case "set_default":
+        await setDefaultModelMenu();
+        break;
     }
   }
+}
+
+async function setDefaultModelMenu(): Promise<void> {
+  const config = ConfigReader.get();
+  const aliasOptions = Object.entries(config.models).map(([name, def]) => ({
+    value: name,
+    label: name,
+    hint: `${def.provider}/${def.model}`,
+  }));
+
+  if (aliasOptions.length === 0) {
+    p.log.warn("No aliases configured. Add one first.");
+    return;
+  }
+
+  const selection = await p.select({
+    message: "Select default model for Eve",
+    options: [...aliasOptions, { value: "back", label: "← Back" }],
+  });
+
+  if (isCancel(selection) || selection === "back") return;
+
+  config.eve.model = selection as string;
+  ConfigReader.save(config);
+  p.log.success(`Default model set to "${selection}"`);
 }
 
 /**
@@ -830,11 +859,18 @@ async function configureModelAliases(): Promise<void> {
     const providerSelection = await p.select({
       message: `Select provider for "${aliasName}"`,
       options: [
-        ...providers.map((p) => ({
-          value: p,
-          label: p,
-          hint: authStore.hasAuth(p) ? "✅ credentials found" : "⚠️ no credentials",
-        })),
+        ...providers.map((p) => {
+          const meta = SUPPORTED_PROVIDERS.find((sp) => sp.key === p);
+          let hint = "";
+          if (meta && !meta.requiresKey) {
+            hint = "no credentials required";
+          } else if (authStore.hasAuth(p)) {
+            hint = "✅ credentials found";
+          } else {
+            hint = "⚠️ no credentials";
+          }
+          return { value: p, label: p, hint };
+        }),
         { value: "back", label: "← Back" },
       ],
     });
