@@ -27,6 +27,32 @@ const API_KEY_PROVIDERS = [
   { key: "openrouter", name: "OpenRouter" },
 ] as const;
 
+const SUPPORTED_PROVIDERS = [
+  { key: "anthropic", name: "Anthropic", requiresKey: true, requiresUrl: false },
+  { key: "openai", name: "OpenAI", requiresKey: true, requiresUrl: false },
+  { key: "google", name: "Google Gemini", requiresKey: true, requiresUrl: false },
+  { key: "openrouter", name: "OpenRouter", requiresKey: true, requiresUrl: false },
+  { key: "ollama", name: "Ollama (Local)", requiresKey: false, requiresUrl: true, defaultUrl: "http://localhost:11434/v1" },
+] as const;
+
+const MODEL_PRESETS: Record<string, Array<{ value: string; label: string; hint?: string }>> = {
+  anthropic: [
+    { value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet", hint: "recommended" },
+    { value: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku", hint: "fast" },
+    { value: "claude-3-opus-20240229", label: "Claude 3 Opus", hint: "powerful" },
+  ],
+  openai: [
+    { value: "gpt-4o", label: "GPT-4o", hint: "recommended" },
+    { value: "gpt-4o-mini", label: "GPT-4o Mini", hint: "fast" },
+  ],
+  google: [
+    { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro", hint: "recommended" },
+    { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash", hint: "fast" },
+  ],
+  openrouter: [], // User inputs custom model ID
+  ollama: [], // User inputs local model name
+};
+
 function maskApiKey(key: string): string {
   if (key.length <= 8) return "****";
   return key.slice(0, 4) + "..." + key.slice(-4);
@@ -90,7 +116,7 @@ export async function interactiveConfigure(): Promise<void> {
         await handleAuthentication();
         break;
       case "providers":
-        await handleProviders();
+        await handleProviderManagement();
         break;
       case "email":
         await handleEmailAccounts();
@@ -380,6 +406,16 @@ async function addApiKey(): Promise<void> {
   });
 
   p.log.success(`${providerMeta.name} API key saved!`);
+
+  // Auto-link: ensure provider entry exists in eve.json
+  const config = ConfigReader.get();
+  if (!config.providers[provider as string]) {
+    config.providers[provider as string] = {
+      base_url: null,
+    };
+    ConfigReader.save(config);
+    p.log.success(`Automatically added ${provider} to providers in eve.json`);
+  }
 }
 
 function listCredentials(): void {
@@ -439,29 +475,348 @@ async function removeCredentials(): Promise<void> {
   p.log.success("Credentials removed.");
 }
 
-async function handleProviders(): Promise<void> {
+async function handleProviderManagement(): Promise<void> {
+  while (true) {
+    const config = ConfigReader.get();
+    const providers = Object.keys(config.providers || {});
+
+    const action = await p.select({
+      message: "Providers & Models",
+      options: [
+        { value: "add", label: "➕ Add Provider" },
+        { value: "edit", label: "✏️  Edit Provider", hint: `${providers.length} configured` },
+        { value: "remove", label: "🗑️  Remove Provider" },
+        { value: "aliases", label: "🎯 Configure Model Aliases" },
+        { value: "back", label: "← Back" },
+      ],
+    });
+
+    if (isCancel(action) || action === "back") break;
+
+    switch (action) {
+      case "add":
+        await addProvider();
+        break;
+      case "edit":
+        await editProviderMenu();
+        break;
+      case "remove":
+        await removeProviderMenu();
+        break;
+      case "aliases":
+        await configureModelAliases();
+        break;
+    }
+  }
+}
+
+async function addProvider(): Promise<void> {
   const config = ConfigReader.get();
+  const existingProviders = Object.keys(config.providers);
 
-  p.note("Configure which provider/model to use for different tasks.", "Providers & Models");
+  const availableProviders = SUPPORTED_PROVIDERS.filter((p) => !existingProviders.includes(p.key));
 
-  const currentModel = config.eve.model;
+  if (availableProviders.length === 0) {
+    p.log.warn("All supported providers are already configured.");
+    return;
+  }
 
-  const models = Object.entries(config.models || {}).map(([name, alias]) => ({
-    value: name,
-    label: `${name}: ${alias.provider}/${alias.model}`,
-  }));
-
-  const selectedModel = await p.select({
-    message: "Select default model for Eve",
-    options: [...models, { value: "back", label: "← Back" }],
+  const selection = await p.select({
+    message: "Select provider to add",
+    options: [
+      ...availableProviders.map((prov) => ({
+        value: prov.key,
+        label: prov.name,
+        hint: prov.key === "anthropic" ? "recommended" : undefined,
+      })),
+      { value: "back", label: "← Back" },
+    ],
   });
 
-  if (isCancel(selectedModel) || selectedModel === "back") return;
+  if (isCancel(selection) || selection === "back") return;
 
-  config.eve.model = selectedModel as string;
+  const providerKey = selection as string;
+  const providerMeta = SUPPORTED_PROVIDERS.find((p) => p.key === providerKey)!;
+
+  let baseUrl: string | undefined;
+  if (providerMeta.requiresUrl) {
+    const urlInput = await p.text({
+      message: `${providerMeta.name} API URL`,
+      placeholder: providerMeta.defaultUrl,
+      defaultValue: providerMeta.defaultUrl,
+      validate: (value) => {
+        if (!value.trim()) return "URL is required";
+        try {
+          new URL(value);
+          return undefined;
+        } catch {
+          return "Invalid URL format";
+        }
+      },
+    });
+    if (isCancel(urlInput)) return;
+    baseUrl = (urlInput as string).trim();
+  }
+
+  if (providerMeta.requiresKey) {
+    const authStore = AuthStore.getInstance();
+    const hasKey = authStore.hasAuth(providerKey);
+
+    if (!hasKey) {
+      const apiKeyInput = await p.text({
+        message: `${providerMeta.name} API Key`,
+        placeholder: "sk-...",
+        validate: (value) => (value.trim() ? undefined : "API key is required"),
+      });
+
+      if (isCancel(apiKeyInput)) return;
+
+      const apiKeyValue = (apiKeyInput as string).trim();
+      authStore.setProfile(`${providerKey}:api-key`, {
+        type: "api_key",
+        provider: providerKey as any,
+        api_key: apiKeyValue,
+      });
+      p.log.success(`API key saved to auth.json`);
+    } else {
+      p.log.info(`Using existing API key from auth.json`);
+    }
+  }
+
+  // Save to eve.json
+  config.providers[providerKey] = {
+    base_url: baseUrl || null,
+  };
   ConfigReader.save(config);
+  p.log.success(`✅ Added provider: ${providerKey}`);
 
-  p.log.success(`Default model set to ${selectedModel}`);
+  const configureAlias = await p.confirm({
+    message: "Configure a model alias for this provider now?",
+  });
+
+  if (!isCancel(configureAlias) && configureAlias) {
+    await configureModelAliases();
+  }
+}
+
+async function editProviderMenu(): Promise<void> {
+  const config = ConfigReader.get();
+  const providers = Object.keys(config.providers);
+
+  if (providers.length === 0) {
+    p.log.warn("No providers configured to edit.");
+    return;
+  }
+
+  const selection = await p.select({
+    message: "Select provider to edit",
+    options: [
+      ...providers.map((p) => ({ value: p, label: p })),
+      { value: "back", label: "← Back" },
+    ],
+  });
+
+  if (isCancel(selection) || selection === "back") return;
+
+  const providerKey = selection as string;
+  const providerConfig = config.providers[providerKey];
+
+  const field = await p.select({
+    message: `Editing ${providerKey}`,
+    options: [
+      { value: "base_url", label: "API URL", hint: providerConfig.base_url || "default" },
+      { value: "timeout_ms", label: "Timeout (ms)", hint: String(providerConfig.timeout_ms || 30000) },
+      { value: "back", label: "← Back" },
+    ],
+  });
+
+  if (isCancel(field) || field === "back") return;
+
+  if (field === "base_url") {
+    const urlInput = await p.text({
+      message: "New API URL",
+      placeholder: providerConfig.base_url || "http://...",
+      validate: (value) => {
+        if (!value.trim()) return undefined; // allow clearing
+        try {
+          new URL(value);
+          return undefined;
+        } catch {
+          return "Invalid URL format";
+        }
+      },
+    });
+    if (isCancel(urlInput)) return;
+    providerConfig.base_url = (urlInput as string).trim() || null;
+  } else if (field === "timeout_ms") {
+    const timeoutInput = await p.text({
+      message: "Timeout in milliseconds",
+      placeholder: String(providerConfig.timeout_ms || 30000),
+      validate: (value) => {
+        const n = parseInt(value, 10);
+        if (isNaN(n) || n < 0) return "Must be a positive number";
+        return undefined;
+      },
+    });
+    if (isCancel(timeoutInput)) return;
+    providerConfig.timeout_ms = parseInt(timeoutInput as string, 10);
+  }
+
+  ConfigReader.save(config);
+  p.log.success(`Updated ${providerKey} configuration`);
+}
+
+async function removeProviderMenu(): Promise<void> {
+  const config = ConfigReader.get();
+  const providers = Object.keys(config.providers);
+
+  if (providers.length === 0) {
+    p.log.warn("No providers configured to remove.");
+    return;
+  }
+
+  const selection = await p.select({
+    message: "Select provider to remove",
+    options: [
+      ...providers.map((p) => ({ value: p, label: p })),
+      { value: "back", label: "← Back" },
+    ],
+  });
+
+  if (isCancel(selection) || selection === "back") return;
+
+  const providerKey = selection as string;
+
+  // Check for aliases using this provider
+  const affectedAliases = Object.entries(config.models)
+    .filter(([_, def]) => def.provider === providerKey)
+    .map(([name]) => name);
+
+  if (affectedAliases.length > 0) {
+    p.log.warn(`Warning: The following aliases use this provider and will break: ${affectedAliases.join(", ")}`);
+  }
+
+  const confirm = await p.confirm({
+    message: `Are you sure you want to remove ${providerKey}?`,
+  });
+
+  if (isCancel(confirm) || !confirm) return;
+
+  delete config.providers[providerKey];
+  ConfigReader.save(config);
+  p.log.success(`Removed provider ${providerKey} from eve.json`);
+
+  const authStore = AuthStore.getInstance();
+  if (authStore.hasAuth(providerKey)) {
+    const removeCreds = await p.confirm({
+      message: `Also remove credentials for ${providerKey} from auth.json?`,
+    });
+    if (!isCancel(removeCreds) && removeCreds) {
+      const profiles = authStore.listProfiles().filter((p) => p.id.startsWith(`${providerKey}:`));
+      for (const p of profiles) {
+        authStore.removeProfile(p.id);
+      }
+      p.log.success(`Removed credentials for ${providerKey}`);
+    }
+  }
+}
+
+async function configureModelAliases(): Promise<void> {
+  const config = ConfigReader.get();
+  const authStore = AuthStore.getInstance();
+
+  while (true) {
+    const aliasOptions = Object.entries(config.models).map(([name, def]) => ({
+      value: name,
+      label: `${name}: ${def.provider}/${def.model}`,
+    }));
+
+    const selection = await p.select({
+      message: "Configure model aliases",
+      options: [
+        ...aliasOptions,
+        { value: "add", label: "➕ Add new alias" },
+        { value: "back", label: "← Back" },
+      ],
+    });
+
+    if (isCancel(selection) || selection === "back") break;
+
+    let aliasName = selection as string;
+    let isNew = false;
+
+    if (aliasName === "add") {
+      const nameInput = await p.text({
+        message: "New alias name",
+        placeholder: "e.g. local, code, vision",
+        validate: (value) => {
+          if (!value.trim()) return "Name is required";
+          if (config.models[value]) return "Alias already exists";
+          if (!/^[a-zA-Z0-9_]+$/.test(value)) return "Invalid name format (alphanumeric and underscore only)";
+          return undefined;
+        },
+      });
+      if (isCancel(nameInput)) continue;
+      aliasName = (nameInput as string).trim();
+      isNew = true;
+    }
+
+    // 1. Select Provider
+    const providers = Object.keys(config.providers);
+    if (providers.length === 0) {
+      p.log.warn("No providers configured. Add a provider first.");
+      continue;
+    }
+
+    const providerSelection = await p.select({
+      message: `Select provider for "${aliasName}"`,
+      options: [
+        ...providers.map((p) => ({
+          value: p,
+          label: p,
+          hint: authStore.hasAuth(p) ? "✅ credentials found" : "⚠️ no credentials",
+        })),
+        { value: "back", label: "← Back" },
+      ],
+    });
+
+    if (isCancel(providerSelection) || providerSelection === "back") continue;
+    const providerKey = providerSelection as string;
+
+    // 2. Select Model
+    const presets = MODEL_PRESETS[providerKey] || [];
+    const modelSelection = await p.select({
+      message: `Select model for ${providerKey}`,
+      options: [
+        ...presets.map((m) => ({ value: m.value, label: m.label, hint: m.hint })),
+        { value: "manual", label: "✏️  Enter model ID manually" },
+        { value: "back", label: "← Back" },
+      ],
+    });
+
+    if (isCancel(modelSelection) || modelSelection === "back") continue;
+
+    let modelId: string;
+    if (modelSelection === "manual") {
+      const manualId = await p.text({
+        message: "Model ID",
+        placeholder: "e.g. gpt-4o, llama3, anthropic/claude-3-5-sonnet",
+        validate: (value) => (value.trim() ? undefined : "Model ID is required"),
+      });
+      if (isCancel(manualId)) continue;
+      modelId = (manualId as string).trim();
+    } else {
+      modelId = modelSelection as string;
+    }
+
+    config.models[aliasName] = {
+      provider: providerKey,
+      model: modelId,
+    };
+
+    ConfigReader.save(config);
+    p.log.success(`${isNew ? "Added" : "Updated"} alias "${aliasName}" → ${providerKey}/${modelId}`);
+  }
 }
 
 async function showConfig(): Promise<void> {
