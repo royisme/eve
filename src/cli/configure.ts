@@ -53,6 +53,12 @@ const MODEL_PRESETS: Record<string, Array<{ value: string; label: string; hint?:
   ollama: [], // User inputs local model name
 };
 
+/**
+ * Produce a compact, display-safe representation of an API key.
+ *
+ * @param key - The API key to mask
+ * @returns The masked key: `****` if `key` length is 8 or fewer characters, otherwise the first 4 characters, `...`, and the last 4 characters
+ */
 function maskApiKey(key: string): string {
   if (key.length <= 8) return "****";
   return key.slice(0, 4) + "..." + key.slice(-4);
@@ -62,6 +68,11 @@ function isCancel(value: unknown): value is symbol {
   return p.isCancel(value);
 }
 
+/**
+ * Launches the interactive CLI configuration flow for Eve.
+ *
+ * Presents a main menu that lets the user manage authentication credentials, providers and model aliases, Gmail accounts, or view the current configuration; the flow runs until the user selects "Done" or cancels.
+ */
 export async function interactiveConfigure(): Promise<void> {
   p.intro("🔧 Eve Configuration");
 
@@ -369,6 +380,12 @@ async function addOAuth(): Promise<void> {
   p.log.warn("OAuth support coming soon. Please use API Key for now.");
 }
 
+/**
+ * Prompts the user to select an API-key-based provider, collects an API key, and persists it.
+ *
+ * Saves the key in the AuthStore under the profile name `<provider>:api-key` and, if the provider
+ * is not present in the Eve configuration, adds a provider entry to eve.json with `base_url: null`.
+ */
 async function addApiKey(): Promise<void> {
   const provider = await p.select({
     message: "Select provider",
@@ -418,6 +435,11 @@ async function addApiKey(): Promise<void> {
   }
 }
 
+/**
+ * Display a summary of stored authentication profiles to the user.
+ *
+ * Prints a note listing each configured credential: for API-key profiles shows the provider and a masked API key; for OAuth profiles shows the provider, authorization status, and expiry date if available. If no credentials exist, shows a "No credentials configured." note.
+ */
 function listCredentials(): void {
   const authStore = AuthStore.getInstance();
   const profiles = authStore.listProfiles();
@@ -444,6 +466,11 @@ function listCredentials(): void {
   p.note(lines.join("\n"), "Configured Credentials");
 }
 
+/**
+ * Interactively removes a stored authentication profile.
+ *
+ * Prompts the user to select a credential to delete, asks for confirmation, removes the selected profile from the credential store, and logs the outcome. If no credentials exist or the user cancels, the function returns without changes.
+ */
 async function removeCredentials(): Promise<void> {
   const authStore = AuthStore.getInstance();
   const profiles = authStore.listProfiles();
@@ -475,6 +502,9 @@ async function removeCredentials(): Promise<void> {
   p.log.success("Credentials removed.");
 }
 
+/**
+ * Presents an interactive menu for managing providers and model aliases and repeats until the user chooses Back or cancels.
+ */
 async function handleProviderManagement(): Promise<void> {
   while (true) {
     const config = ConfigReader.get();
@@ -510,6 +540,11 @@ async function handleProviderManagement(): Promise<void> {
   }
 }
 
+/**
+ * Interactively add a supported provider to the Eve configuration.
+ *
+ * Prompts the user to select an unconfigured provider, optionally collects an API URL and/or API key as required by the provider, persists credentials to auth.json and provider settings to eve.json, and offers to configure a model alias for the new provider. Gracefully aborts if the user cancels any prompt and warns if all supported providers are already configured.
+ */
 async function addProvider(): Promise<void> {
   const config = ConfigReader.get();
   const existingProviders = Object.keys(config.providers);
@@ -599,6 +634,13 @@ async function addProvider(): Promise<void> {
   }
 }
 
+/**
+ * Presents an interactive menu to edit a configured provider's settings and saves any changes to the persisted configuration.
+ *
+ * Allows updating the provider's API URL and request timeout:
+ * - API URL: accepts a valid URL or an empty value to clear the URL (saved as `null`).
+ * - Timeout (ms): accepts a non-negative integer number of milliseconds.
+ */
 async function editProviderMenu(): Promise<void> {
   const config = ConfigReader.get();
   const providers = Object.keys(config.providers);
@@ -666,6 +708,13 @@ async function editProviderMenu(): Promise<void> {
   p.log.success(`Updated ${providerKey} configuration`);
 }
 
+/**
+ * Interactively removes a configured provider from the project's eve.json and optionally removes its stored credentials.
+ *
+ * Prompts the user to select a provider to remove; if selected, warns about any model aliases that reference the provider,
+ * asks for confirmation, deletes the provider entry from the configuration and persists the change, and then optionally
+ * removes any matching credential profiles from auth.json. User cancelation at any prompt aborts the operation.
+ */
 async function removeProviderMenu(): Promise<void> {
   const config = ConfigReader.get();
   const providers = Object.keys(config.providers);
@@ -721,6 +770,16 @@ async function removeProviderMenu(): Promise<void> {
   }
 }
 
+/**
+ * Interactively add or update model aliases in the Eve configuration.
+ *
+ * Runs a prompt-driven loop that lets the user create new aliases or edit existing ones by
+ * selecting a provider and choosing a model (from provider-specific presets or by entering a
+ * model ID manually). Alias names are validated (required, unique, alphanumeric/underscore).
+ * The flow requires at least one configured provider and indicates whether credentials exist for
+ * each provider. Changes are persisted to the configuration and a success message is shown when
+ * an alias is added or updated. The loop exits when the user selects Back or cancels.
+ */
 async function configureModelAliases(): Promise<void> {
   const config = ConfigReader.get();
   const authStore = AuthStore.getInstance();
@@ -819,6 +878,17 @@ async function configureModelAliases(): Promise<void> {
   }
 }
 
+/**
+ * Display a human-readable snapshot of the current Eve configuration to the user.
+ *
+ * Gathers configuration and authentication data, then shows:
+ * - paths to config and auth files,
+ * - configured credentials (API keys are masked, OAuth entries include authorization status and expiry if available),
+ * - configured model aliases (alias → provider/model),
+ * - Eve settings (default model),
+ * - Gmail accounts (primary and authorization status).
+ * If the Gmail accounts database is unavailable, indicates that state.
+ */
 async function showConfig(): Promise<void> {
   const config = ConfigReader.get();
   const authStore = AuthStore.getInstance();
