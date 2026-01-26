@@ -418,9 +418,9 @@ async function addApiKey(): Promise<void> {
   const authStore = AuthStore.getInstance();
   authStore.setProfile(`${provider}:api-key`, {
     type: "api_key",
-    provider: provider as "openai" | "anthropic" | "google" | "openrouter",
+    provider: provider as any,
     api_key: apiKeyValue,
-  });
+  } as AuthProfile);
 
   p.log.success(`${providerMeta.name} API key saved!`);
 
@@ -624,7 +624,7 @@ async function addProvider(): Promise<void> {
 
   if (providerMeta.requiresKey) {
     const authStore = AuthStore.getInstance();
-    const hasKey = authStore.hasAuth(providerKey);
+    const hasKey = !!authStore.getApiKey(providerKey);
 
     if (!hasKey) {
       const apiKeyInput = await p.text({
@@ -640,7 +640,7 @@ async function addProvider(): Promise<void> {
         type: "api_key",
         provider: providerKey as any,
         api_key: apiKeyValue,
-      });
+      } as AuthProfile);
       p.log.success(`API key saved to auth.json`);
     } else {
       p.log.info(`Using existing API key from auth.json`);
@@ -771,14 +771,24 @@ async function removeProviderMenu(): Promise<void> {
     .map(([name]) => name);
 
   if (affectedAliases.length > 0) {
-    p.log.warn(`Warning: The following aliases use this provider and will break: ${affectedAliases.join(", ")}`);
+    p.log.warn(`Warning: The following aliases use this provider and will be removed: ${affectedAliases.join(", ")}`);
   }
 
   const confirm = await p.confirm({
-    message: `Are you sure you want to remove ${providerKey}?`,
+    message: `Are you sure you want to remove ${providerKey}${affectedAliases.length > 0 ? " and its associated aliases" : ""}?`,
   });
 
   if (isCancel(confirm) || !confirm) return;
+
+  // Cleanup aliases and update default model if necessary
+  for (const alias of affectedAliases) {
+    delete config.models[alias];
+  }
+
+  if (affectedAliases.includes(config.eve.model)) {
+    config.eve.model = "smart";
+    p.log.info("Default model alias was removed; reset to 'smart'.");
+  }
 
   delete config.providers[providerKey];
   ConfigReader.save(config);
