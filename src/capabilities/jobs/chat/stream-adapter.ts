@@ -1,40 +1,22 @@
 import type { SSEStreamingApi } from "hono/streaming";
 import type { AISDKEvent, FinishReason } from "./types";
 
-const HEARTBEAT_INTERVAL_MS = 15000;
-
 function generateId(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function generateEventId(): string {
-  return `evt_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export class AISDKStreamAdapter {
   private stream: SSEStreamingApi;
   private closed = false;
-  private pingInterval: ReturnType<typeof setInterval> | null = null;
 
   private currentReasoningId: string | null = null;
-  private currentReasoningContent = "";
   private currentTextId: string | null = null;
-  private currentTextContent = "";
+  private currentToolInputId: string | null = null;
+  private currentToolInputBuffer = "";
+  private currentToolInputMeta: { toolCallId: string; toolName: string } | null = null;
 
   constructor(stream: SSEStreamingApi) {
     this.stream = stream;
-    this.startHeartbeat();
-  }
-
-  private startHeartbeat(): void {
-    this.pingInterval = setInterval(async () => {
-      if (!this.closed) {
-        await this.send({
-          id: generateEventId(),
-          type: "ping",
-        });
-      }
-    }, HEARTBEAT_INTERVAL_MS);
   }
 
   async send(event: AISDKEvent): Promise<void> {
@@ -45,23 +27,19 @@ export class AISDKStreamAdapter {
     });
   }
 
-  async sendMessageStart(messageId: string): Promise<void> {
+  async sendStart(messageId: string): Promise<void> {
     await this.send({
-      id: generateEventId(),
-      type: "message-start",
+      id: generateId("start"),
+      type: "start",
       messageId,
-      role: "assistant",
-      timestamp: new Date().toISOString(),
     });
   }
 
   async sendReasoningStart(): Promise<void> {
     this.currentReasoningId = generateId("reason");
-    this.currentReasoningContent = "";
     await this.send({
-      id: generateEventId(),
       type: "reasoning-start",
-      reasoningId: this.currentReasoningId,
+      id: this.currentReasoningId,
     });
   }
 
@@ -69,11 +47,9 @@ export class AISDKStreamAdapter {
     if (!this.currentReasoningId) {
       await this.sendReasoningStart();
     }
-    this.currentReasoningContent += delta;
     await this.send({
-      id: generateEventId(),
       type: "reasoning-delta",
-      reasoningId: this.currentReasoningId!,
+      id: this.currentReasoningId!,
       delta,
     });
   }
@@ -81,23 +57,18 @@ export class AISDKStreamAdapter {
   async sendReasoningEnd(): Promise<void> {
     if (this.currentReasoningId) {
       await this.send({
-        id: generateEventId(),
         type: "reasoning-end",
-        reasoningId: this.currentReasoningId,
-        content: this.currentReasoningContent,
+        id: this.currentReasoningId,
       });
       this.currentReasoningId = null;
-      this.currentReasoningContent = "";
     }
   }
 
   async sendTextStart(): Promise<void> {
     this.currentTextId = generateId("text");
-    this.currentTextContent = "";
     await this.send({
-      id: generateEventId(),
       type: "text-start",
-      textId: this.currentTextId,
+      id: this.currentTextId,
     });
   }
 
@@ -105,11 +76,9 @@ export class AISDKStreamAdapter {
     if (!this.currentTextId) {
       await this.sendTextStart();
     }
-    this.currentTextContent += delta;
     await this.send({
-      id: generateEventId(),
       type: "text-delta",
-      textId: this.currentTextId!,
+      id: this.currentTextId!,
       delta,
     });
   }
@@ -117,56 +86,65 @@ export class AISDKStreamAdapter {
   async sendTextEnd(): Promise<void> {
     if (this.currentTextId) {
       await this.send({
-        id: generateEventId(),
         type: "text-end",
-        textId: this.currentTextId,
-        content: this.currentTextContent,
+        id: this.currentTextId,
       });
       this.currentTextId = null;
-      this.currentTextContent = "";
     }
   }
 
-  async sendToolCallStart(
-    toolCallId: string,
-    toolName: string,
-    args: Record<string, unknown>
-  ): Promise<void> {
+  async sendToolInputStart(toolCallId: string, toolName: string): Promise<void> {
+    this.currentToolInputId = generateId("tool");
+    this.currentToolInputBuffer = "";
+    this.currentToolInputMeta = { toolCallId, toolName };
     await this.send({
-      id: generateEventId(),
-      type: "tool-call-start",
+      id: this.currentToolInputId,
+      type: "tool-input-start",
       toolCallId,
       toolName,
-      arguments: args,
     });
   }
 
-  async sendToolCallDelta(
-    toolCallId: string,
-    progress?: { current?: number; total?: number; message?: string }
-  ): Promise<void> {
+  async sendToolInputDelta(delta: string): Promise<void> {
+    if (!this.currentToolInputId || !this.currentToolInputMeta) {
+      return;
+    }
+    this.currentToolInputBuffer += delta;
     await this.send({
-      id: generateEventId(),
-      type: "tool-call-delta",
-      toolCallId,
-      status: "running",
-      progress,
+      id: this.currentToolInputId,
+      type: "tool-input-delta",
+      toolCallId: this.currentToolInputMeta.toolCallId,
+      inputTextDelta: delta,
     });
   }
 
-  async sendToolCallResult(
+  async sendToolInputAvailable(input: Record<string, unknown>): Promise<void> {
+    if (!this.currentToolInputId || !this.currentToolInputMeta) {
+      return;
+    }
+    await this.send({
+      id: this.currentToolInputId,
+      type: "tool-input-available",
+      toolCallId: this.currentToolInputMeta.toolCallId,
+      toolName: this.currentToolInputMeta.toolName,
+      input,
+    });
+    this.currentToolInputId = null;
+    this.currentToolInputBuffer = "";
+    this.currentToolInputMeta = null;
+  }
+
+  async sendToolOutputAvailable(
     toolCallId: string,
-    result: string,
-    isError = false,
-    data?: Record<string, unknown>
+    toolName: string,
+    output: Record<string, unknown> | string
   ): Promise<void> {
     await this.send({
-      id: generateEventId(),
-      type: "tool-call-result",
+      id: generateId("tool-output"),
+      type: "tool-output-available",
       toolCallId,
-      result,
-      isError,
-      data,
+      toolName,
+      output,
     });
   }
 
@@ -176,9 +154,8 @@ export class AISDKStreamAdapter {
     usage?: { inputTokens: number; outputTokens: number }
   ): Promise<void> {
     await this.send({
-      id: generateEventId(),
-      type: "message-end",
-      messageId,
+      id: generateId("finish"),
+      type: "finish",
       finishReason,
       usage,
     });
@@ -186,19 +163,13 @@ export class AISDKStreamAdapter {
 
   async sendError(code: string, message: string, retryAfter?: number): Promise<void> {
     await this.send({
-      id: generateEventId(),
+      id: generateId("error"),
       type: "error",
-      code,
-      message,
-      retryAfter,
+      errorText: retryAfter ? `${message} (retry after ${retryAfter}s)` : message,
     });
   }
 
   close(): void {
-    if (this.pingInterval) {
-      clearInterval(this.pingInterval);
-      this.pingInterval = null;
-    }
     this.closed = true;
   }
 
@@ -208,5 +179,9 @@ export class AISDKStreamAdapter {
 
   get isTextOpen(): boolean {
     return this.currentTextId !== null;
+  }
+
+  get hasOpenToolInput(): boolean {
+    return this.currentToolInputId !== null;
   }
 }
