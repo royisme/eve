@@ -33,6 +33,20 @@ const SUPPORTED_PROVIDERS = [
   { key: "google", name: "Google Gemini", requiresKey: true, requiresUrl: false },
   { key: "openrouter", name: "OpenRouter", requiresKey: true, requiresUrl: false },
   { key: "ollama", name: "Ollama (Local)", requiresKey: false, requiresUrl: true, defaultUrl: "http://localhost:11434/v1" },
+  {
+    key: "openai-compatible",
+    name: "OpenAI Compatible (DeepSeek, OneAPI, etc.)",
+    requiresKey: true,
+    requiresUrl: true,
+    defaultUrl: "https://api.deepseek.com/v1",
+  },
+  {
+    key: "anthropic-compatible",
+    name: "Anthropic Compatible",
+    requiresKey: true,
+    requiresUrl: true,
+    defaultUrl: "https://api.anthropic.com",
+  },
 ] as const;
 
 const MODEL_PRESETS: Record<string, Array<{ value: string; label: string; hint?: string }>> = {
@@ -51,6 +65,8 @@ const MODEL_PRESETS: Record<string, Array<{ value: string; label: string; hint?:
   ],
   openrouter: [], // User inputs custom model ID
   ollama: [], // User inputs local model name
+  "openai-compatible": [],
+  "anthropic-compatible": [],
 };
 
 /**
@@ -99,8 +115,9 @@ export async function interactiveConfigure(): Promise<void> {
         {
           value: "providers" as const,
           label: "🤖 Providers & Models",
-          hint: "Configure default models",
+          hint: "Manage vendors and assign Model IDs to roles",
         },
+
         {
           value: "email" as const,
           label: "📧 Gmail Accounts",
@@ -424,7 +441,6 @@ async function addApiKey(): Promise<void> {
 
   p.log.success(`${providerMeta.name} API key saved!`);
 
-  // Auto-link: ensure provider entry exists in eve.json
   const config = ConfigReader.get();
   if (!config.providers[provider as string]) {
     config.providers[provider as string] = {
@@ -432,6 +448,16 @@ async function addApiKey(): Promise<void> {
     };
     ConfigReader.save(config);
     p.log.success(`Automatically added ${provider} to providers in eve.json`);
+  }
+
+  const hasModel = Object.values(config.models).some((m) => m.provider === provider);
+  if (!hasModel) {
+    const setupModel = await p.confirm({
+      message: `No models are assigned to ${provider} yet. Setup one now?`,
+    });
+    if (!isCancel(setupModel) && setupModel) {
+      await setupModelForProvider(provider as string);
+    }
   }
 }
 
@@ -510,19 +536,37 @@ async function handleProviderManagement(): Promise<void> {
     const config = ConfigReader.get();
     const providers = Object.keys(config.providers || {});
 
+    const isDefaultResolved = config.models[config.eve.model] !== undefined;
+    const defaultHint = isDefaultResolved ? config.eve.model : `❌ ${config.eve.model} (not configured)`;
+
     const action = await p.select({
       message: "Providers & Models",
       options: [
-        { value: "add", label: "➕ Add Provider" },
-        { value: "edit", label: "✏️  Edit Provider", hint: `${providers.length} configured` },
-        { value: "remove", label: "🗑️  Remove Provider" },
-        { value: "aliases", label: "🎯 Configure Model Aliases" },
-        { value: "set_default", label: "⭐ Set Default Model", hint: config.eve.model },
+        { value: "add", label: "➕  Add Provider" },
+        { value: "edit", label: "✏️   Edit Provider", hint: `${providers.length} configured` },
+        { value: "remove", label: "🗑️   Remove Provider" },
+        { value: "divider1", label: "───────────────────", hint: "Essential Roles" },
+        {
+          value: "smart",
+          label: "🧠  Configure \"smart\" Role",
+          hint: config.models.smart
+            ? `using ${config.models.smart.model}`
+            : "❌ Not configured (Core logic)",
+        },
+        {
+          value: "fast",
+          label: "⚡  Configure \"fast\" Role",
+          hint: config.models.fast
+            ? `using ${config.models.fast.model}`
+            : "❌ Not configured (Extraction)",
+        },
+        { value: "divider2", label: "───────────────────", hint: "Advanced" },
+        { value: "aliases", label: "📦  Manage Custom Models" },
         { value: "back", label: "← Back" },
       ],
     });
 
-    if (isCancel(action) || action === "back") break;
+    if (isCancel(action) || action === "back" || String(action).startsWith("divider")) break;
 
     switch (action) {
       case "add":
@@ -534,14 +578,81 @@ async function handleProviderManagement(): Promise<void> {
       case "remove":
         await removeProviderMenu();
         break;
+      case "smart":
+      case "fast":
+        await configureEssentialRole(action as string);
+        break;
       case "aliases":
         await configureModelAliases();
         break;
-      case "set_default":
-        await setDefaultModelMenu();
-        break;
     }
   }
+}
+
+async function configureEssentialRole(roleName: string): Promise<void> {
+  const config = ConfigReader.get();
+  const authStore = AuthStore.getInstance();
+  const providers = Object.keys(config.providers);
+
+  if (providers.length === 0) {
+    p.log.warn("No providers configured. Add a provider first.");
+    return;
+  }
+
+  const providerSelection = await p.select({
+    message: `Select provider for the \"${roleName}\" role`,
+    options: [
+      ...providers.map((p) => {
+        const meta = SUPPORTED_PROVIDERS.find((sp) => sp.key === p);
+        let hint = "";
+        if (meta && !meta.requiresKey) {
+          hint = "no credentials required";
+        } else if (authStore.hasAuth(p)) {
+          hint = "✅ credentials found";
+        } else {
+          hint = "⚠️ no credentials";
+        }
+        return { value: p, label: p, hint };
+      }),
+      { value: "back", label: "← Back" },
+    ],
+  });
+
+  if (isCancel(providerSelection) || providerSelection === "back") return;
+  const providerKey = providerSelection as string;
+
+  const presets = MODEL_PRESETS[providerKey] || [];
+  const modelSelection = await p.select({
+    message: `Select model for ${providerKey}`,
+    options: [
+      ...presets.map((m) => ({ value: m.value, label: m.label, hint: m.hint })),
+      { value: "manual", label: "✏️  Enter model ID manually" },
+      { value: "back", label: "← Back" },
+    ],
+  });
+
+  if (isCancel(modelSelection) || modelSelection === "back") return;
+
+  let modelId: string;
+  if (modelSelection === "manual") {
+    const manualId = await p.text({
+      message: "Model ID",
+      placeholder: "e.g. gpt-4o, llama3, glm-4",
+      validate: (value) => (value.trim() ? undefined : "Model ID is required"),
+    });
+    if (isCancel(manualId)) return;
+    modelId = (manualId as string).trim();
+  } else {
+    modelId = modelSelection as string;
+  }
+
+  config.models[roleName] = {
+    provider: providerKey,
+    model: modelId,
+  };
+
+  ConfigReader.save(config);
+  p.log.success(`Role \"${roleName}\" successfully assigned to ${providerKey}/${modelId}`);
 }
 
 async function setDefaultModelMenu(): Promise<void> {
@@ -567,6 +678,83 @@ async function setDefaultModelMenu(): Promise<void> {
   config.eve.model = selection as string;
   ConfigReader.save(config);
   p.log.success(`Default model set to "${selection}"`);
+}
+
+async function setupModelForProvider(providerKey: string): Promise<void> {
+  const config = ConfigReader.get();
+
+  const presets = MODEL_PRESETS[providerKey] || [];
+  const modelSelection = await p.select({
+    message: `Step 1: Which physical model ID from ${providerKey} do you want to use?`,
+    options: [
+      ...presets.map((m) => ({ value: m.value, label: m.label, hint: m.hint })),
+      { value: "manual", label: "✏️  Enter model ID manually" },
+      { value: "back", label: "← Back" },
+    ],
+  });
+
+  if (isCancel(modelSelection) || modelSelection === "back") return;
+
+  let modelId: string;
+  if (modelSelection === "manual") {
+    const manualId = await p.text({
+      message: "Enter the precise Model ID (e.g. gpt-4o, llama3, glm-4)",
+      placeholder: "model-id-string",
+      validate: (value) => (value.trim() ? undefined : "Model ID is required"),
+    });
+    if (isCancel(manualId)) return;
+    modelId = (manualId as string).trim();
+  } else {
+    modelId = modelSelection as string;
+  }
+
+  const roleSelection = await p.select({
+    message: `Step 2: What role should "${modelId}" play in Eve?`,
+    options: [
+      {
+        value: "smart",
+        label: "smart (Recommended)",
+        hint: "Used for complex reasoning and coding tasks",
+      },
+      { value: "fast", label: "fast", hint: "Used for simple classification or quick replies" },
+      { value: "custom", label: "✏️  Define a custom role name" },
+    ],
+  });
+
+  if (isCancel(roleSelection)) return;
+
+  let aliasName: string;
+  if (roleSelection === "custom") {
+    const customName = await p.text({
+      message: "Enter a custom role name",
+      placeholder: "e.g. vision, local-coder",
+      validate: (value) => {
+        if (!value.trim()) return "Name is required";
+        if (!/^[a-zA-Z0-9_\-\.\/]+$/.test(value)) return "Invalid format";
+        return undefined;
+      },
+    });
+    if (isCancel(customName)) return;
+    aliasName = (customName as string).trim();
+  } else {
+    aliasName = roleSelection as string;
+  }
+
+  const isUpdate = config.models[aliasName] !== undefined;
+  config.models[aliasName] = {
+    provider: providerKey,
+    model: modelId,
+  };
+
+  if (Object.keys(config.models).length === 1 || !config.models[config.eve.model]) {
+    config.eve.model = aliasName;
+    p.log.info(`Note: Since this is your primary model, Eve's default is now set to role "${aliasName}".`);
+  }
+
+  ConfigReader.save(config);
+  p.log.success(
+    `${isUpdate ? "Updated" : "Created"} assignment: Role "${aliasName}" will now use ${providerKey}/${modelId}`
+  );
 }
 
 /**
@@ -826,14 +1014,15 @@ async function configureModelAliases(): Promise<void> {
   while (true) {
     const aliasOptions = Object.entries(config.models).map(([name, def]) => ({
       value: name,
-      label: `${name}: ${def.provider}/${def.model}`,
+      label: `${name}`,
+      hint: `via ${def.provider} using model "${def.model}"`,
     }));
 
     const selection = await p.select({
-      message: "Configure model aliases",
+      message: "Manage Models (Assign Model IDs to usage names)",
       options: [
         ...aliasOptions,
-        { value: "add", label: "➕ Add new alias" },
+        { value: "add", label: "➕ Add new model assignment" },
         { value: "back", label: "← Back" },
       ],
     });
@@ -850,7 +1039,8 @@ async function configureModelAliases(): Promise<void> {
         validate: (value) => {
           if (!value.trim()) return "Name is required";
           if (config.models[value]) return "Alias already exists";
-          if (!/^[a-zA-Z0-9_]+$/.test(value)) return "Invalid name format (alphanumeric and underscore only)";
+          if (!/^[a-zA-Z0-9_\-\.\/]+$/.test(value))
+            return "Invalid name format (alphanumeric, underscore, hyphen, dot, and slash only)";
           return undefined;
         },
       });
@@ -962,10 +1152,24 @@ async function showConfig(): Promise<void> {
     }
   }
 
-  lines.push("");
-  lines.push("🤖 Providers & Models:");
-  for (const [name, alias] of Object.entries(config.models || {})) {
-    lines.push(`  ${name}: ${alias.provider}/${alias.model}`);
+  lines.push("📦 Configured Models:");
+  const models = Object.entries(config.models || {});
+  if (models.length === 0) {
+    lines.push("  ⚠️  No models configured! Use 'Manage Models' to add one.");
+  } else {
+    for (const [name, alias] of models) {
+      const isDefault = name === config.eve.model ? " (Current Default)" : "";
+      lines.push(`  - ${name}: [${alias.provider}] ID: "${alias.model}"${isDefault}`);
+    }
+
+    // Check for critical missing roles
+    const requiredRoles = ["smart", "fast"];
+    const missingRoles = requiredRoles.filter((role) => !config.models[role]);
+    if (missingRoles.length > 0) {
+      lines.push("");
+      lines.push(`  ❌ CRITICAL MISSING ROLES: ${missingRoles.join(", ")}`);
+      lines.push("     Eve requires these roles to function correctly.");
+    }
   }
 
   lines.push("");
