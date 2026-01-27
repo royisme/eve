@@ -25,7 +25,7 @@ export class JobsChatSession {
   private toolInvocations: ToolInvocation[] = [];
 
   private persistInterval: ReturnType<typeof setInterval> | null = null;
-  private eventQueue: Array<{ event: AgentEvent; adapter: AISDKStreamAdapter }> = [];
+  private eventQueue: Array<{ event: any; adapter: AISDKStreamAdapter }> = [];
   private isProcessingQueue = false;
 
   constructor(request: JobsChatRequest) {
@@ -70,8 +70,8 @@ export class JobsChatSession {
 
       this.startPeriodicPersist();
 
-      const unsubscribe = this.agent.subscribe((event: unknown) => {
-        this.enqueueEvent(event as AgentEvent, adapter);
+      const unsubscribe = this.agent.subscribe((event: any) => {
+        this.enqueueEvent(event, adapter);
       });
 
       this.abortController.signal.addEventListener("abort", () => {
@@ -187,32 +187,47 @@ export class JobsChatSession {
   }
 
   private async handleAgentEvent(
-    event: AgentEvent,
+    event: any,
     adapter: AISDKStreamAdapter
   ): Promise<void> {
     if (this.abortController.signal.aborted) return;
 
     switch (event.type) {
       case "message_update":
-        await this.handleMessageUpdate(event as MessageUpdateEvent, adapter);
+        if (event.assistantMessageEvent) {
+          await this.handleOldFormatMessageUpdate(event, adapter);
+        } else if (event.message?.role === "assistant") {
+          await this.handleNewFormatMessageUpdate(event, adapter);
+        }
+        break;
+
+      case "text_delta":
+        this.textContent += event.delta;
+        await adapter.sendTextDelta(event.delta);
+        break;
+
+      case "message_end":
+        if (event.message?.stopReason === "error") {
+          const errorMsg = event.message.errorMessage || "Unknown agent error";
+          await adapter.sendError("agent_error", errorMsg);
+        }
         break;
 
       case "tool_execution_start":
-        await this.handleToolExecutionStart(event as ToolExecutionStartEvent, adapter);
+        await this.handleToolExecutionStart(event, adapter);
         break;
 
       case "tool_execution_end":
-        await this.handleToolExecutionEnd(event as ToolExecutionEndEvent, adapter);
+        await this.handleToolExecutionEnd(event, adapter);
         break;
     }
   }
 
-  private async handleMessageUpdate(
-    event: MessageUpdateEvent,
+  private async handleOldFormatMessageUpdate(
+    event: any,
     adapter: AISDKStreamAdapter
   ): Promise<void> {
     const { assistantMessageEvent } = event;
-
     if (!assistantMessageEvent) return;
 
     switch (assistantMessageEvent.type) {
@@ -221,7 +236,6 @@ export class JobsChatSession {
           this.isReasoning = true;
           await adapter.sendReasoningStart();
         }
-
         this.reasoningContent += assistantMessageEvent.delta;
         await adapter.sendReasoningDelta(assistantMessageEvent.delta);
         break;
@@ -231,15 +245,29 @@ export class JobsChatSession {
           await adapter.sendReasoningEnd();
           this.isReasoning = false;
         }
-
         this.textContent += assistantMessageEvent.delta;
         await adapter.sendTextDelta(assistantMessageEvent.delta);
         break;
     }
   }
 
+  private async handleNewFormatMessageUpdate(
+    event: any,
+    adapter: AISDKStreamAdapter
+  ): Promise<void> {
+    const delta = event.delta || event.message?.delta;
+    if (delta) {
+      if (this.isReasoning) {
+        await adapter.sendReasoningEnd();
+        this.isReasoning = false;
+      }
+      this.textContent += delta;
+      await adapter.sendTextDelta(delta);
+    }
+  }
+
   private async handleToolExecutionStart(
-    event: ToolExecutionStartEvent,
+    event: any,
     adapter: AISDKStreamAdapter
   ): Promise<void> {
     if (adapter.isTextOpen) {
@@ -263,7 +291,7 @@ export class JobsChatSession {
   }
 
   private async handleToolExecutionEnd(
-    event: ToolExecutionEndEvent,
+    event: any,
     adapter: AISDKStreamAdapter
   ): Promise<void> {
     const { toolCallId, result, isError } = event;
@@ -295,7 +323,7 @@ export class JobsChatSession {
     return "Tool executed successfully";
   }
 
-  private enqueueEvent(event: AgentEvent, adapter: AISDKStreamAdapter): void {
+  private enqueueEvent(event: any, adapter: AISDKStreamAdapter): void {
     this.eventQueue.push({ event, adapter });
     this.processEventQueue();
   }
@@ -323,40 +351,4 @@ export class JobsChatSession {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
   }
-}
-
-interface AgentEvent {
-  type: string;
-  assistantMessageEvent?: {
-    type: string;
-    delta?: string;
-  };
-  toolCallId?: string;
-  toolName?: string;
-  args?: unknown;
-  result?: unknown;
-  isError?: boolean;
-}
-
-interface MessageUpdateEvent {
-  type: "message_update";
-  assistantMessageEvent: {
-    type: "thinking_delta" | "text_delta";
-    delta: string;
-  };
-}
-
-interface ToolExecutionStartEvent {
-  type: "tool_execution_start";
-  toolCallId: string;
-  toolName: string;
-  args: unknown;
-}
-
-interface ToolExecutionEndEvent {
-  type: "tool_execution_end";
-  toolCallId: string;
-  toolName: string;
-  result: unknown;
-  isError: boolean;
 }

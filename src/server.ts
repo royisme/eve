@@ -26,7 +26,7 @@ type IngestPayload = {
   timestamp: string;
 };
 
-export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
+export async function createApp(): Promise<Hono> {
   const app = new Hono();
   const eveService = getEveService();
   const dispatcher = new Dispatcher();
@@ -403,10 +403,9 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
   });
 
   // Mount protected routes
+  protectedApp.route("/jobs/chat", jobsChat);
   app.route("/", protectedApp);
 
-  protectedApp.route("/jobs/chat", jobsChat);
-  
   app.get("/api/scheduler/status", async (c: Context) => {
     return c.json(await Scheduler.getStatus());
   });
@@ -422,6 +421,12 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
     return c.json({ events });
   });
 
+  return app;
+}
+
+export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
+  const app = await createApp();
+
   console.log(`🔌 Eve HTTP API listening on http://localhost:${port}`);
   console.log(`   Endpoints: /health, /agent/status, /chat, /jobs/chat, /ingest, /jobs, /resumes, /tailor`);
   const schedulerStatus = await Scheduler.getStatus();
@@ -432,6 +437,7 @@ export async function startServer(port: number = DEFAULT_PORT): Promise<void> {
     fetch: app.fetch,
   });
 }
+
 
 if (import.meta.main) {
   const port = parseInt(process.env.PORT || String(DEFAULT_PORT), 10);
