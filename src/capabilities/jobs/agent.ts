@@ -1,11 +1,15 @@
 import { Agent } from "@mariozechner/pi-agent-core";
 import { getModel } from "@mariozechner/pi-ai";
+import type { Model, Api } from "@mariozechner/pi-ai";
 import { jobsCapability } from "./index";
 import { resumeCapability } from "../resume";
 import { AuthStore } from "../../core/auth-store";
+import { ConfigReader } from "../../core/config-reader";
 
 export interface JobsAgentConfig {
   showThinking?: boolean;
+  provider?: string;
+  model?: string;
 }
 
 const JOBS_SYSTEM_PROMPT = `You are an expert job hunting assistant. Your role is to help users:
@@ -30,7 +34,19 @@ const DEFAULT_MODEL = "claude-sonnet-4-20250514";
 
 async function getApiKey(provider: string): Promise<string | undefined> {
   const authStore = AuthStore.getInstance();
-  const fromAuth = authStore.getApiKey(provider.toLowerCase());
+  let fromAuth = authStore.getApiKey(provider.toLowerCase());
+
+  if (!fromAuth) {
+    const config = ConfigReader.get();
+    for (const [pName, pConfig] of Object.entries(config.providers)) {
+      const mappedProvider = (pName === "openai-compatible" ? "openai" : pName === "anthropic-compatible" ? "anthropic" : pName);
+      if (mappedProvider === provider) {
+        fromAuth = authStore.getApiKey(pName);
+        if (fromAuth) break;
+      }
+    }
+  }
+
   if (fromAuth) return fromAuth;
 
   const envKeys: Record<string, string[]> = {
@@ -46,23 +62,69 @@ async function getApiKey(provider: string): Promise<string | undefined> {
   return undefined;
 }
 
+function resolveModel(provider: string, modelId: string): Model<any> {
+  const apiProvider = (provider === "openai-compatible" ? "openai" : provider === "anthropic-compatible" ? "anthropic" : provider) as any;
+  
+  let baseUrl: string | undefined;
+  try {
+    const registry = ConfigReader.getProviderRegistry();
+    const providerConfig = registry.getProvider(provider);
+    if (providerConfig?.base_url) {
+      baseUrl = providerConfig.base_url;
+    }
+  } catch (e) {}
+
+  if (baseUrl) {
+    const apiType: Api = apiProvider === "anthropic" ? "anthropic-messages" : "openai-completions";
+    return {
+      id: modelId,
+      name: modelId,
+      api: apiType,
+      provider: apiProvider,
+      baseUrl: baseUrl,
+      reasoning: false,
+      input: ["text"],
+      contextWindow: 128000,
+      maxTokens: 4096,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    } as Model<any>;
+  }
+
+  return getModel(apiProvider, modelId as any);
+}
+
 export async function createJobsAgent(config: JobsAgentConfig = {}): Promise<Agent> {
+  const eveConfig = ConfigReader.get();
+  
+  // Resolve provider and model
+  let provider = config.provider;
+  let modelId = config.model;
+
+  if (!provider || !modelId) {
+    const alias = eveConfig.eve.model || "smart";
+    try {
+      const resolved = ConfigReader.getModelResolver().resolve(alias);
+      provider = provider || resolved.provider;
+      modelId = modelId || resolved.modelId;
+    } catch (e) {
+      provider = provider || DEFAULT_PROVIDER;
+      modelId = modelId || DEFAULT_MODEL;
+    }
+  }
+
   const resumeReadTools = resumeCapability.tools.filter((t) =>
     ["resume_get", "resume_list", "resume_set_default"].includes(t.name)
   );
 
   const tools = [...jobsCapability.tools, ...resumeReadTools];
 
-  console.log(`[JobsAgent] Creating agent with ${tools.length} tools`);
+  console.log(`[JobsAgent] Creating agent with ${tools.length} tools using ${provider}/${modelId}`);
 
   const agent = new Agent({
     getApiKey,
     initialState: {
       systemPrompt: JOBS_SYSTEM_PROMPT,
-      model: getModel(
-        DEFAULT_PROVIDER as Parameters<typeof getModel>[0],
-        DEFAULT_MODEL as Parameters<typeof getModel>[1]
-      ),
+      model: resolveModel(provider!, modelId!),
       tools,
     },
   });
