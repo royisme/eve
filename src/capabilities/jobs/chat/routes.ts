@@ -33,6 +33,10 @@ jobsChat.post("/", async (c: Context) => {
         error instanceof Error ? error.message : "Unknown error"
       );
       adapter.close();
+    } finally {
+      await stream.writeSSE({
+        data: "[DONE]",
+      });
     }
   });
 });

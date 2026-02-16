@@ -23,6 +23,7 @@ export class JobsChatSession {
   private reasoningContent = "";
   private textContent = "";
   private toolInvocations: ToolInvocation[] = [];
+  private currentToolCall: { toolCallId: string; toolName: string } | null = null;
 
   private persistInterval: ReturnType<typeof setInterval> | null = null;
   private eventQueue: Array<{ event: any; adapter: AISDKStreamAdapter }> = [];
@@ -64,7 +65,7 @@ export class JobsChatSession {
         showThinking: this.request.options?.showThinking !== false,
       });
 
-      await adapter.sendMessageStart(this.messageId);
+      await adapter.sendStart(this.messageId);
 
       const prompt = this.buildPrompt();
 
@@ -91,7 +92,11 @@ export class JobsChatSession {
         await adapter.sendReasoningEnd();
       }
 
-      await adapter.sendMessageEnd(this.messageId, "stop");
+      if (adapter.hasOpenToolInput) {
+        await adapter.sendToolInputAvailable({});
+      }
+
+       await adapter.sendMessageEnd(this.messageId, "stop");
 
       await this.persistMessage("stop");
     } catch (error) {
@@ -99,11 +104,11 @@ export class JobsChatSession {
         await adapter.sendMessageEnd(this.messageId, "stop");
         await this.persistMessage("stop");
       } else {
-        await adapter.sendError(
-          "internal_error",
-          error instanceof Error ? error.message : "Unknown error"
-        );
-        await this.persistMessage("error");
+         await adapter.sendError(
+           "internal_error",
+           error instanceof Error ? error.message : "Unknown error"
+         );
+         await this.persistMessage("error");
       }
     } finally {
       this.stopPeriodicPersist();
@@ -209,7 +214,7 @@ export class JobsChatSession {
       case "message_end":
         if (event.message?.stopReason === "error") {
           const errorMsg = event.message.errorMessage || "Unknown agent error";
-          await adapter.sendError("agent_error", errorMsg);
+        await adapter.sendError("agent_error", errorMsg);
         }
         break;
 
@@ -287,7 +292,13 @@ export class JobsChatSession {
     };
     this.toolInvocations.push(invocation);
 
-    await adapter.sendToolCallStart(event.toolCallId, event.toolName, (event.args ?? {}) as Record<string, unknown>);
+    this.currentToolCall = {
+      toolCallId: event.toolCallId,
+      toolName: event.toolName,
+    };
+    await adapter.sendToolInputStart(event.toolCallId, event.toolName);
+    await adapter.sendToolInputDelta(JSON.stringify(event.args ?? {}));
+    await adapter.sendToolInputAvailable((event.args ?? {}) as Record<string, unknown>);
   }
 
   private async handleToolExecutionEnd(
@@ -295,6 +306,7 @@ export class JobsChatSession {
     adapter: AISDKStreamAdapter
   ): Promise<void> {
     const { toolCallId, result, isError } = event;
+    const toolName = this.currentToolCall?.toolName ?? "unknown_tool";
 
     const invocation = this.toolInvocations.find((t) => t.toolCallId === toolCallId);
     if (invocation) {
@@ -303,10 +315,18 @@ export class JobsChatSession {
     }
 
     if (isError) {
-      await adapter.sendToolCallResult(toolCallId, `Error: ${String(result)}`, true);
+      await adapter.sendToolOutputAvailable(toolCallId, toolName, {
+        error: `Error: ${String(result)}`,
+      });
     } else {
       const resultText = this.extractResultText(result);
-      await adapter.sendToolCallResult(toolCallId, resultText, false);
+      await adapter.sendToolOutputAvailable(toolCallId, toolName, {
+        result: resultText,
+      });
+    }
+
+    if (this.currentToolCall?.toolCallId === toolCallId) {
+      this.currentToolCall = null;
     }
   }
 

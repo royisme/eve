@@ -33,104 +33,104 @@ export interface ChatOptions {
 }
 
 export type AISDKEventType =
-  | "message-start"
+  | "start"
   | "reasoning-start"
   | "reasoning-delta"
   | "reasoning-end"
   | "text-start"
   | "text-delta"
   | "text-end"
-  | "tool-call-start"
-  | "tool-call-delta"
-  | "tool-call-result"
-  | "message-end"
-  | "error"
-  | "ping";
+  | "tool-input-start"
+  | "tool-input-delta"
+  | "tool-input-available"
+  | "tool-output-available"
+  | "tool-approval-request"
+  | "finish"
+  | "error";
 
-export interface MessageStartEvent {
+export interface StartEvent {
   id: string; // Unique event ID
-  type: "message-start";
+  type: "start";
   messageId: string;
-  role: "assistant";
-  timestamp: string;
 }
 
 export interface ReasoningStartEvent {
-  id: string; // Unique event ID
+  id: string; // Unique part ID
   type: "reasoning-start";
-  reasoningId: string;
 }
 
 export interface ReasoningDeltaEvent {
-  id: string; // Unique event ID
+  id: string; // Unique part ID
   type: "reasoning-delta";
-  reasoningId: string;
   delta: string;
 }
 
 export interface ReasoningEndEvent {
-  id: string; // Unique event ID
+  id: string; // Unique part ID
   type: "reasoning-end";
-  reasoningId: string;
-  content: string;
 }
 
 export interface TextStartEvent {
-  id: string; // Unique event ID
+  id: string; // Unique part ID
   type: "text-start";
-  textId: string;
 }
 
 export interface TextDeltaEvent {
-  id: string; // Unique event ID
+  id: string; // Unique part ID
   type: "text-delta";
-  textId: string;
   delta: string;
 }
 
 export interface TextEndEvent {
-  id: string; // Unique event ID
+  id: string; // Unique part ID
   type: "text-end";
-  textId: string;
-  content: string;
 }
 
-export interface ToolCallStartEvent {
-  id: string; // Unique event ID
-  type: "tool-call-start";
+export interface ToolInputStartEvent {
+  id: string; // Unique part ID
+  type: "tool-input-start";
   toolCallId: string;
   toolName: string;
-  arguments: Record<string, unknown>;
 }
 
-export interface ToolCallDeltaEvent {
-  id: string; // Unique event ID
-  type: "tool-call-delta";
+export interface ToolInputDeltaEvent {
+  id: string; // Unique part ID
+  type: "tool-input-delta";
   toolCallId: string;
-  status: "running";
-  progress?: {
-    current?: number;
-    total?: number;
-    message?: string;
-  };
+  inputTextDelta: string;
 }
 
-export interface ToolCallResultEvent {
-  id: string; // Unique event ID
-  type: "tool-call-result";
+export interface ToolInputAvailableEvent {
+  id: string; // Unique part ID
+  type: "tool-input-available";
   toolCallId: string;
-  result: string;
-  isError: boolean;
-  data?: Record<string, unknown>;
+  toolName: string;
+  input: Record<string, unknown>;
+}
+
+export interface ToolOutputAvailableEvent {
+  id: string; // Unique part ID
+  type: "tool-output-available";
+  toolCallId: string;
+  toolName: string;
+  output: Record<string, unknown> | string;
+}
+
+export interface ToolApprovalRequestEvent {
+  id: string; // Unique part ID
+  type: "tool-approval-request";
+  approvalId: string;
+  toolCallId: string;
+  toolName: string;
+  reason?: string;
 }
 
 export type FinishReason = "stop" | "tool-calls" | "length" | "content-filter" | "error";
 
-export interface MessageEndEvent {
+export interface FinishEvent {
   id: string; // Unique event ID
-  type: "message-end";
-  messageId: string;
-  finishReason: FinishReason;
+  type: "finish";
+  finishReason?: FinishReason;
   usage?: {
     inputTokens: number;
     outputTokens: number;
@@ -140,30 +140,24 @@ export interface MessageEndEvent {
 export interface ErrorEvent {
   id: string; // Unique event ID
   type: "error";
-  code: string;
-  message: string;
-  retryAfter?: number;
-}
-
-export interface PingEvent {
-  id: string; // Unique event ID
-  type: "ping";
+  errorText: string;
 }
 
 export type AISDKEvent =
-  | MessageStartEvent
+  | StartEvent
   | ReasoningStartEvent
   | ReasoningDeltaEvent
   | ReasoningEndEvent
   | TextStartEvent
   | TextDeltaEvent
   | TextEndEvent
-  | ToolCallStartEvent
-  | ToolCallDeltaEvent
-  | ToolCallResultEvent
-  | MessageEndEvent
-  | ErrorEvent
-  | PingEvent;
+  | ToolInputStartEvent
+  | ToolInputDeltaEvent
+  | ToolInputAvailableEvent
+  | ToolOutputAvailableEvent
+  | ToolApprovalRequestEvent
+  | FinishEvent
+  | ErrorEvent;
 
 export interface JobsChatResponse {
   messageId: string;
